@@ -1,0 +1,11 @@
+*.user
+.vs/
+*/.vs/
+x64/
+*/x64/
+*/Release/
+*/Debug/
+output/
+/.cursor/rules/encoding.mdc
+/.vscode/settings.json
+
