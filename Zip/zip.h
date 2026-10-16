@@ -3,12 +3,14 @@
 
 #include <Windows.h>
 
+// 修改原因：统一声明及示例中的大括号和控制语句排版。
+// 变更内容：仅调整换行、空白和缩进，不修改接口定义。
+
 // ZIP 压缩接口：用于创建 ZIP 文件。本轮修改原因：统一中文说明与 UTF-8 BOM 编码；变更内容仅限注释和编码。
 // 本文件由 Lucian Wischik 对 Info-ZIP 源码重新封装，
 // 原始源码位于 www.info-zip.org，完整版权声明保留在 Zip.cpp 中。
 // 封装的目的是简化并扩展 Windows/C++ 下的使用方式，
 // 同时增加加密与 Unicode 支持。
-
 
 #ifndef _unzip_H
 DECLARE_HANDLE(HZIP);
@@ -18,10 +20,8 @@ DECLARE_HANDLE(HZIP);
 typedef DWORD ZRESULT;
 // ZRESULT 为 ZIP 接口的返回码类型，具体定义见下文。
 
-
-
 HZIP CreateZip(const TCHAR *fn, const char *password);
-HZIP CreateZip(void *buf,unsigned int len, const char *password);
+HZIP CreateZip(void *buf, unsigned int len, const char *password);
 HZIP CreateZipHandle(HANDLE h, const char *password);
 // CreateZip：开始创建 ZIP 文件，并返回操作句柄。
 // 创建过程支持以下存储位置：
@@ -53,12 +53,11 @@ HZIP CreateZipHandle(HANDLE h, const char *password);
 // 桌面 Windows 下库会复制该句柄，
 // 因此调用方可以自行关闭原句柄。
 
-
-ZRESULT ZipAdd(HZIP hz,const TCHAR *dstzn, const TCHAR *fn);
-ZRESULT ZipAdd(HZIP hz,const TCHAR *dstzn, void *src,unsigned int len);
-ZRESULT ZipAddHandle(HZIP hz,const TCHAR *dstzn, HANDLE h);
-ZRESULT ZipAddHandle(HZIP hz,const TCHAR *dstzn, HANDLE h, unsigned int len);
-ZRESULT ZipAddFolder(HZIP hz,const TCHAR *dstzn);
+ZRESULT ZipAdd(HZIP hz, const TCHAR *dstzn, const TCHAR *fn);
+ZRESULT ZipAdd(HZIP hz, const TCHAR *dstzn, void *src, unsigned int len);
+ZRESULT ZipAddHandle(HZIP hz, const TCHAR *dstzn, HANDLE h);
+ZRESULT ZipAddHandle(HZIP hz, const TCHAR *dstzn, HANDLE h, unsigned int len);
+ZRESULT ZipAddFolder(HZIP hz, const TCHAR *dstzn);
 // ZipAdd：将一个文件或目录条目添加到 ZIP 归档。
 // dstzn 指定条目在 ZIP 文件内部保存的名称。
 // 条目内容可以来自以下来源：
@@ -82,47 +81,40 @@ ZRESULT ZipGetMemory(HZIP hz, void **buf, unsigned long *len);
 ZRESULT CloseZip(HZIP hz);
 // CloseZip：必须通过该函数关闭 ZIP 句柄。
 
-unsigned int FormatZipMessage(ZRESULT code, TCHAR *buf,unsigned int len);
+unsigned int FormatZipMessage(ZRESULT code, TCHAR *buf, unsigned int len);
 // FormatZipMessage：将返回码格式化为错误说明字符串。
 // 返回错误说明的长度；如果 buf 和 len 指定了有效缓冲区，
 // 还会在容量允许的范围内将说明写入该缓冲区。
 
-
-
 // 以下为接口返回码：
-#define ZR_OK         0x00000000     // 操作成功。注意：ZR_RECENT 是查询最近错误的伪返回码，
-#define ZR_RECENT     0x00000001     // 接口不会直接返回它，但可将其传入 FormatZipMessage。
+#define ZR_OK 0x00000000     // 操作成功。注意：ZR_RECENT 是查询最近错误的伪返回码，
+#define ZR_RECENT 0x00000001 // 接口不会直接返回它，但可将其传入 FormatZipMessage。
 // 以下返回码表示系统或资源错误，例如文件无法打开。
-#define ZR_GENMASK    0x0000FF00
-#define ZR_NODUPH     0x00000100     // 无法复制句柄
-#define ZR_NOFILE     0x00000200     // 无法创建/打开文件
-#define ZR_NOALLOC    0x00000300     // 资源分配失败。
-#define ZR_WRITE      0x00000400     // 写入文件时发生错误。
-#define ZR_NOTFOUND   0x00000500     // 归档中未找到指定文件。
-#define ZR_MORE       0x00000600     // 仍有数据需要继续解压。
-#define ZR_CORRUPT    0x00000700     // ZIP 文件损坏，或输入不是 ZIP 文件。
-#define ZR_READ       0x00000800     // 读取文件时发生错误。
+#define ZR_GENMASK 0x0000FF00
+#define ZR_NODUPH 0x00000100   // 无法复制句柄
+#define ZR_NOFILE 0x00000200   // 无法创建/打开文件
+#define ZR_NOALLOC 0x00000300  // 资源分配失败。
+#define ZR_WRITE 0x00000400    // 写入文件时发生错误。
+#define ZR_NOTFOUND 0x00000500 // 归档中未找到指定文件。
+#define ZR_MORE 0x00000600     // 仍有数据需要继续解压。
+#define ZR_CORRUPT 0x00000700  // ZIP 文件损坏，或输入不是 ZIP 文件。
+#define ZR_READ 0x00000800     // 读取文件时发生错误。
 // 以下返回码表示调用方使用错误。
 #define ZR_CALLERMASK 0x00FF0000
-#define ZR_ARGS       0x00010000     // 参数错误。
-#define ZR_NOTMMAP    0x00020000     // ZipGetMemory 仅适用于内存映射归档，当前归档不满足此条件。
-#define ZR_MEMSIZE    0x00030000     // 内存空间不足。
-#define ZR_FAILED     0x00040000     // 调用该函数之前已发生错误。
-#define ZR_ENDED      0x00050000     // 归档创建过程已结束。
-#define ZR_MISSIZE    0x00060000     // 实际输入大小与指定大小不一致。
-#define ZR_PARTIALUNZ 0x00070000     // 该条目已经被部分解压。
-#define ZR_ZMODE      0x00080000     // 混用了创建归档和打开归档的操作。
+#define ZR_ARGS 0x00010000       // 参数错误。
+#define ZR_NOTMMAP 0x00020000    // ZipGetMemory 仅适用于内存映射归档，当前归档不满足此条件。
+#define ZR_MEMSIZE 0x00030000    // 内存空间不足。
+#define ZR_FAILED 0x00040000     // 调用该函数之前已发生错误。
+#define ZR_ENDED 0x00050000      // 归档创建过程已结束。
+#define ZR_MISSIZE 0x00060000    // 实际输入大小与指定大小不一致。
+#define ZR_PARTIALUNZ 0x00070000 // 该条目已经被部分解压。
+#define ZR_ZMODE 0x00080000      // 混用了创建归档和打开归档的操作。
 // 以下返回码表示 ZIP 库内部错误。
-#define ZR_BUGMASK    0xFF000000
-#define ZR_NOTINITED  0x01000000     // 内部初始化未完成。
-#define ZR_SEEK       0x02000000     // 试图在不支持定位的文件或流上移动读写位置。
-#define ZR_NOCHANGE   0x04000000     // 不允许在当前阶段改变存储方式。
-#define ZR_FLATE      0x05000000     // 压缩或解压算法内部错误。
-
-
-
-
-
+#define ZR_BUGMASK 0xFF000000
+#define ZR_NOTINITED 0x01000000 // 内部初始化未完成。
+#define ZR_SEEK 0x02000000      // 试图在不支持定位的文件或流上移动读写位置。
+#define ZR_NOCHANGE 0x04000000  // 不允许在当前阶段改变存储方式。
+#define ZR_FLATE 0x05000000     // 压缩或解压算法内部错误。
 
 // 使用示例：
 //
@@ -137,7 +129,11 @@ unsigned int FormatZipMessage(ZRESULT code, TCHAR *buf,unsigned int len);
 //     // 添加普通文件。
 //     ZipAdd(hz,"src1.txt",  "c:\\src1.txt");
 //     // 添加内存数据。
-//     char buf[1000]; for (int i=0; i<1000; i++) buf[i]=(char)(i&0x7F);
+//     char buf[1000];
+//     for (int i=0; i<1000; i++)
+//     {
+//         buf[i]=(char)(i&0x7F);
+//     }
 //     ZipAdd(hz,"file.dat",  buf,1000);
 //     // 添加管道数据。
 //     HANDLE hread,hwrite; CreatePipe(&hread,&hwrite,NULL,0);
@@ -146,7 +142,8 @@ unsigned int FormatZipMessage(ZRESULT code, TCHAR *buf,unsigned int len);
 //     WaitForSingleObject(hthread,INFINITE);
 //     CloseHandle(hthread); CloseHandle(hread);
 //     // 另一个线程同时执行以下函数：DWORD WINAPI ThreadFunc(void *dat)
-//                   { HANDLE hwrite = (HANDLE)dat;
+//                   {
+//                     HANDLE hwrite = (HANDLE)dat;
 //                     char buf[1000]={17};
 //                     DWORD writ; WriteFile(hwrite,buf,1000,&writ,NULL);
 //                     CloseHandle(hwrite);
@@ -169,18 +166,22 @@ unsigned int FormatZipMessage(ZRESULT code, TCHAR *buf,unsigned int len);
 //     WaitForSingleObject(hthread,INFINITE);
 //     CloseHandle(hthread);
 //     // 另一个线程同时执行以下函数：DWORD WINAPI ZipReceiverThread(void *dat)
-//                   { HANDLE hread = (HANDLE)dat;
+//                   {
+//                     HANDLE hread = (HANDLE)dat;
 //                     char buf[1000];
 //                     while (true)
-//                     { DWORD red; ReadFile(hread,buf,1000,&red,NULL);
+//                     {
+//                       DWORD red;
+//                       ReadFile(hread,buf,1000,&red,NULL);
 //                       // 处理从管道收到的 ZIP 数据。
-//                       if (red==0) break;
+//                       if (red==0)
+//                       {
+//                           break;
+//                       }
 //                     }
 //                     CloseHandle(hread);
 //                     return 0;
 //                   }
-
-
 
 // 以下宏兼容仅包含压缩头文件，或同时包含压缩与解压头文件的用法。
 // 当两个头文件都存在时，约定对应的两个实现文件也都参与编译。
@@ -189,16 +190,14 @@ unsigned int FormatZipMessage(ZRESULT code, TCHAR *buf,unsigned int len);
 // 则将公共接口绑定到该头文件对应的实现。
 // 这样可在不同包含组合下复用同一接口名称。
 ZRESULT CloseZipZ(HZIP hz);
-unsigned int FormatZipMessageZ(ZRESULT code, char *buf,unsigned int len);
+unsigned int FormatZipMessageZ(ZRESULT code, char *buf, unsigned int len);
 bool IsZipHandleZ(HZIP hz);
 #ifdef _unzip_H
 #undef CloseZip
-#define CloseZip(hz) (IsZipHandleZ(hz)?CloseZipZ(hz):CloseZipU(hz))
+#define CloseZip(hz) (IsZipHandleZ(hz) ? CloseZipZ(hz) : CloseZipU(hz))
 #else
 #define CloseZip CloseZipZ
 #define FormatZipMessage FormatZipMessageZ
 #endif
-
-
 
 #endif
