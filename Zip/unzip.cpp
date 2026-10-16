@@ -1,33 +1,33 @@
-#include <windows.h>
+﻿#include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <tchar.h>
 #include "unzip.h"
 
-// THIS FILE is almost entirely based upon code by Jean-loup Gailly
-// and Mark Adler. It has been modified by Lucian Wischik.
-// The modifications were: incorporate the bugfixes of 1.1.4, allow
-// unzipping to/from handles/pipes/files/memory, encryption, unicode,
-// a windowsish api, and putting everything into a single .cpp file.
-// The original code may be found at http://www.gzip.org/zlib/
-// The original copyright text follows.
-//
+// 本文件主要基于 Jean-loup Gailly、Mark Adler 的 zlib 解压代码，由 Lucian Wischik 修改。
+// 原封装吸收了 1.1.4 的问题修复，
+// 扩展了句柄、管道、文件、内存输入输出，
+// 增加加密与 Unicode 支持，提供 Windows 风格接口，
+// 并把实现集中到一个 cpp 文件。
+// 原始源码：http://www.gzip.org/zlib/。
+// 以下保留原始版权许可原文；本轮修改原因是统一中文注释和编码，变更内容仅限注释与 UTF-8 BOM。
+// 中文说明：以下为 zlib 1.1.3（1998-07-09）的原始版权与许可，英文原文保留。
 //
 //
 // zlib.h -- interface of the 'zlib' general purpose compression library
 //  version 1.1.3, July 9th, 1998
-//
+// 版权所有：1995—1998 Jean-loup Gailly 和 Mark Adler。
 //  Copyright (C) 1995-1998 Jean-loup Gailly and Mark Adler
-//
+// 免责声明译文：软件按现状提供，无任何明示或默示保证；作者不承担因使用本软件产生的损害。
 //  This software is provided 'as-is', without any express or implied
 //  warranty.  In no event will the authors be held liable for any damages
 //  arising from the use of this software.
-//
+// 授权译文：允许任何人出于任何目的（包括商业用途）使用、修改和自由再分发软件，须遵守下列限制。
 //  Permission is granted to anyone to use this software for any purpose,
 //  including commercial applications, and to alter it and redistribute it
 //  freely, subject to the following restrictions:
-//
+// 条款 1 译文：不得歪曲来源或声称编写了原始软件；在产品文档中致谢受到欢迎，但并非强制。
 //  1. The origin of this software must not be misrepresented; you must not
 //     claim that you wrote the original software. If you use this software
 //     in a product, an acknowledgment in the product documentation would be
@@ -35,37 +35,37 @@
 //  2. Altered source versions must be plainly marked as such, and must not be
 //     misrepresented as being the original software.
 //  3. This notice may not be removed or altered from any source distribution.
-//
+// 条款 2、3 译文：修改版必须明确标注，不得冒充原版；任何源码分发不得删除或修改本声明。
 //  Jean-loup Gailly        Mark Adler
 //  jloup@gzip.org          madler@alumni.caltech.edu
+// 作者与邮箱保持原文。
+//
+// zlib 的格式规范见 RFC 1950、1951、1952，
+// 地址：ftp://ds.internic.net/rfc/rfc1950.txt，
+// 分别对应 zlib、DEFLATE、gzip 格式；后两者文件名为 rfc1951.txt、rfc1952.txt。
 //
 //
-//  The data format used by the zlib library is described by RFCs (Request for
-//  Comments) 1950 to 1952 in the files ftp://ds.internic.net/rfc/rfc1950.txt
-//  (zlib format), rfc1951.txt (deflate format) and rfc1952.txt (gzip format).
+// zlib 库提供内存压缩与解压，并校验未压缩数据的完整性。该版本
+// 仅支持 DEFLATE；原接口设计允许以后增加使用相同流接口的其
+// 他算法。
 //
 //
-//     The 'zlib' compression library provides in-memory compression and
-//  decompression functions, including integrity checks of the uncompressed
-//  data.  This version of the library supports only one compression method
-//  (deflation) but other algorithms will be added later and will have the same
-//  stream interface.
 //
-//     Compression can be done in a single step if the buffers are large
-//  enough (for example if an input file is mmap'ed), or can be done by
-//  repeated calls of the compression function.  In the latter case, the
-//  application must provide more input and/or consume the output
-//  (providing more output space) before each call.
+// 缓冲区足够大时可一次完成压缩，例如输入文件已映射到内存。也可反复
+// 调用压缩函数；此时应用必须在每次调用前提供更多输入，或消费现有输
+// 出以腾出输出空间。
 //
-//     The library also supports reading and writing files in gzip (.gz) format
-//  with an interface similar to that of stdio.
 //
-//     The library does not install any signal handler. The decoder checks
-//  the consistency of the compressed data, so the library should never
-//  crash even in case of corrupted input.
 //
-// for more info about .ZIP format, see ftp://ftp.cdrom.com/pub/infozip/doc/appnote-970311-iz.zip
-//   PkWare has also a specification at ftp://ftp.pkware.com/probdesc.zip
+// 库还支持以类似 stdio 的接口读取和写入 gzip（.gz）
+// 文件。
+//
+// 库不安装信号处理程序。原说明要求解码器检查数据一致性，使损坏的输
+// 入也不致导致崩溃；此处描述原设计目标。
+//
+//
+// ZIP 格式参考：ftp://ftp.cdrom.com/pub/infozip/doc/appnote-970311-iz.zip。
+// PKWare 规范参考：ftp://ftp.pkware.com/probdesc.zip。
 
 #define ZIP_HANDLE   1
 #define ZIP_FILENAME 2
@@ -109,37 +109,37 @@ void zfree(void *buf)
 
 
 typedef struct tm_unz_s
-{ unsigned int tm_sec;            // seconds after the minute - [0,59]
-  unsigned int tm_min;            // minutes after the hour - [0,59]
-  unsigned int tm_hour;           // hours since midnight - [0,23]
-  unsigned int tm_mday;           // day of the month - [1,31]
-  unsigned int tm_mon;            // months since January - [0,11]
-  unsigned int tm_year;           // years - [1980..2044]
+{ unsigned int tm_sec;            // 秒数，范围 [0,59]。
+  unsigned int tm_min;            // 分钟数，范围 [0,59]。
+  unsigned int tm_hour;           // 小时数，范围 [0,23]。
+  unsigned int tm_mday;           // 当月日期，范围 [1,31]。
+  unsigned int tm_mon;            // 从一月起算的月份编号，范围 [0,11]。
+  unsigned int tm_year;           // 年份，范围 [1980,2044]。
 } tm_unz;
 
 
-// unz_global_info structure contain global data about the ZIPfile
+// unz_global_info 结构包含有关 ZIP 文件的全局数据
 typedef struct unz_global_info_s
-{ unsigned long number_entry;         // total number of entries in the central dir on this disk
-  unsigned long size_comment;         // size of the global comment of the zipfile
+{ unsigned long number_entry;         // 该磁盘上中央目录中的条目总数
+  unsigned long size_comment;         // zip 文件全局注释的大小
 } unz_global_info;
 
-// unz_file_info contain information about a file in the zipfile
+// unz_file_info 包含有关 zip 文件中文件的信息
 typedef struct unz_file_info_s
-{ unsigned long version;              // version made by                 2 bytes
-  unsigned long version_needed;       // version needed to extract       2 bytes
-  unsigned long flag;                 // general purpose bit flag        2 bytes
-  unsigned long compression_method;   // compression method              2 bytes
-  unsigned long dosDate;              // last mod file date in Dos fmt   4 bytes
-  unsigned long crc;                  // crc-32                          4 bytes
-  unsigned long compressed_size;      // compressed size                 4 bytes
-  unsigned long uncompressed_size;    // uncompressed size               4 bytes
-  unsigned long size_filename;        // filename length                 2 bytes
-  unsigned long size_file_extra;      // extra field length              2 bytes
-  unsigned long size_file_comment;    // file comment length             2 bytes
-  unsigned long disk_num_start;       // disk number start               2 bytes
-  unsigned long internal_fa;          // internal file attributes        2 bytes
-  unsigned long external_fa;          // external file attributes        4 bytes
+{ unsigned long version;              // 创建该归档时的版本信息，2 字节。
+  unsigned long version_needed;       // 解压所需的最低版本，2 字节。
+  unsigned long flag;                 // 通用位标志 2 字节
+  unsigned long compression_method;   // 压缩方式 2字节
+  unsigned long dosDate;              // DOS 格式的最后修改时间，4 字节。
+  unsigned long crc;                  // crc-32 4 字节
+  unsigned long compressed_size;      // 压缩大小 4 字节
+  unsigned long uncompressed_size;    // 未压缩大小 4 字节
+  unsigned long size_filename;        // 文件名长度2字节
+  unsigned long size_file_extra;      // 额外字段长度 2 个字节
+  unsigned long size_file_comment;    // 文件注释长度2字节
+  unsigned long disk_num_start;       // 条目起始磁盘编号，2 字节。
+  unsigned long internal_fa;          // 内部文件属性 2 字节
+  unsigned long external_fa;          // 外部文件属性 4 字节
   tm_unz tmu_date;
 } unz_file_info;
 
@@ -163,42 +163,42 @@ typedef struct unz_file_info_s
 #define ZLIB_VERSION "1.1.3"
 
 
-// Allowed flush values; see deflate() for details
+// 允许的冲洗值；详细信息请参见 deflate()
 #define Z_NO_FLUSH      0
 #define Z_SYNC_FLUSH    2
 #define Z_FULL_FLUSH    3
 #define Z_FINISH        4
 
 
-// compression levels
+// 压缩级别
 #define Z_NO_COMPRESSION         0
 #define Z_BEST_SPEED             1
 #define Z_BEST_COMPRESSION       9
 #define Z_DEFAULT_COMPRESSION  (-1)
 
-// compression strategy; see deflateInit2() for details
+// 压缩策略；详细信息请参见 deflateInit2()
 #define Z_FILTERED            1
 #define Z_HUFFMAN_ONLY        2
 #define Z_DEFAULT_STRATEGY    0
 
-// Possible values of the data_type field
+// data_type 字段的可能值
 #define Z_BINARY   0
 #define Z_ASCII    1
 #define Z_UNKNOWN  2
 
-// The deflate compression method (the only one supported in this version)
+// DEFLATE 压缩方式，本版本唯一支持的压缩方式。
 #define Z_DEFLATED   8
 
-// for initializing zalloc, zfree, opaque
+// 用于初始化 zalloc、zfree、opaque
 #define Z_NULL  0
 
-// case sensitivity when searching for filenames
+// 搜索文件名时区分大小写
 #define CASE_SENSITIVE 1
 #define CASE_INSENSITIVE 2
 
 
-// Return codes for the compression/decompression functions. Negative
-// values are errors, positive values are used for special but normal events.
+// 压缩/解压缩函数的返回代码。阴性
+// 值是错误的，正值用于特殊但正常的事件。
 #define Z_OK            0
 #define Z_STREAM_END    1
 #define Z_NEED_DICT     2
@@ -211,10 +211,10 @@ typedef struct unz_file_info_s
 
 
 
-// Basic data types
-typedef unsigned char  Byte;  // 8 bits
-typedef unsigned int   uInt;  // 16 bits or more
-typedef unsigned long  uLong; // 32 bits or more
+// 基本数据类型
+typedef unsigned char  Byte;  // 8位
+typedef unsigned int   uInt;  // 16 位或更多
+typedef unsigned long  uLong; // 32 位或更多
 typedef void *voidpf;
 typedef void     *voidp;
 typedef long z_off_t;
@@ -236,59 +236,59 @@ typedef void   (*free_func)  (voidpf opaque, voidpf address);
 struct internal_state;
 
 typedef struct z_stream_s {
-    Byte    *next_in;  // next input byte
-    uInt     avail_in;  // number of bytes available at next_in
-    uLong    total_in;  // total nb of input bytes read so far
+    Byte    *next_in;  // 下一个输入字节
+    uInt     avail_in;  // next_in 可用的字节数
+    uLong    total_in;  // 到目前为止读取的输入字节总数 nb
 
-    Byte    *next_out; // next output byte should be put there
-    uInt     avail_out; // remaining free space at next_out
-    uLong    total_out; // total nb of bytes output so far
+    Byte    *next_out; // 下一个输出字节应该放在那里
+    uInt     avail_out; // next_out 处的剩余可用空间
+    uLong    total_out; // 到目前为止输出的总字节数
 
-    char     *msg;      // last error message, NULL if no error
-    struct internal_state *state; // not visible by applications
+    char     *msg;      // 最后的错误消息，如果没有错误则为 NULL
+    struct internal_state *state; // 应用程序不可见
 
-    alloc_func zalloc;  // used to allocate the internal state
-    free_func  zfree;   // used to free the internal state
-    voidpf     opaque;  // private data object passed to zalloc and zfree
+    alloc_func zalloc;  // 用于分配内部状态
+    free_func  zfree;   // 用于释放内部状态
+    voidpf     opaque;  // 传递给 zalloc 和 zfree 的私有数据对象
 
-    int     data_type;  // best guess about the data type: ascii or binary
-    uLong   adler;      // adler32 value of the uncompressed data
-    uLong   reserved;   // reserved for future use
+    int     data_type;  // 关于数据类型的最佳猜测：ascii 或二进制
+    uLong   adler;      // 未压缩数据的 adler32 值
+    uLong   reserved;   // 保留供将来使用。
 } z_stream;
 
 typedef z_stream *z_streamp;
 
 
-//   The application must update next_in and avail_in when avail_in has
-//   dropped to zero. It must update next_out and avail_out when avail_out
-//   has dropped to zero. The application must initialize zalloc, zfree and
-//   opaque before calling the init function. All other fields are set by the
-//   compression library and must not be updated by the application.
+// avail_in 降到 0 时，应用必须更新 next_in 与
+// avail_in；avail_out 降到 0 时更新
+// next_out 与 avail_out。调用初始化函数前须设置
+// zalloc、zfree 和 opaque；其余字段由库设置，应用
+// 不得改写。
 //
-//   The opaque value provided by the application will be passed as the first
-//   parameter for calls of zalloc and zfree. This can be useful for custom
-//   memory management. The compression library attaches no meaning to the
-//   opaque value.
+// 应用提供的 opaque 将作为 zalloc 和 zfree
+// 的第一个参数，便于自定义内存管理；压缩库本身不解释该值。
 //
-//   zalloc must return Z_NULL if there is not enough memory for the object.
-//   If zlib is used in a multi-threaded application, zalloc and zfree must be
-//   thread safe.
 //
-//   The fields total_in and total_out can be used for statistics or
-//   progress reports. After compression, total_in holds the total size of
-//   the uncompressed data and may be saved for use in the decompressor
-//   (particularly if the decompressor wants to decompress everything in
-//   a single step).
+//
+// 内存不足时 zalloc 必须返回 Z_NULL；在多线程应用中
+// 使用 zlib 时，zalloc 和 zfree 必须是线程安全
+// 的。
+//
+// total_in 和 total_out 可用于统计或进度报告。
+// 压缩结束后 total_in 为未压缩数据总大小，可保存给解压器
+// ，尤其适合需要一次性解压全部数据的场景。
+//
+//
 //
 
 
-// basic functions
+// 基础函数。
 
 const char *zlibVersion ();
-// The application can compare zlibVersion and ZLIB_VERSION for consistency.
-// If the first character differs, the library code actually used is
-// not compatible with the zlib.h header file used by the application.
-// This check is automatically made by inflateInit.
+// 应用可比较 zlibVersion 与 ZLIB_VERSION
+// 。首字符不同表明实际库与应用使用的 zlib.h 不兼容；
+// inflateInit 会自动执行此检查。
+//
 
 
 
@@ -297,86 +297,86 @@ const char *zlibVersion ();
 
 int inflate (z_streamp strm, int flush);
 //
-//    inflate decompresses as much data as possible, and stops when the input
-//  buffer becomes empty or the output buffer becomes full. It may some
-//  introduce some output latency (reading input without producing any output)
-//  except when forced to flush.
+// inflate 尽量解压数据，输入耗尽或输出缓冲区满时停止。除非
+// 强制刷新，否则可能存在输出延迟，即已经读取输入但暂未生成输出。
 //
-//  The detailed semantics are as follows. inflate performs one or both of the
-//  following actions:
 //
-//  - Decompress more input starting at next_in and update next_in and avail_in
-//    accordingly. If not all input can be processed (because there is not
-//    enough room in the output buffer), next_in is updated and processing
-//    will resume at this point for the next call of inflate().
 //
-//  - Provide more output starting at next_out and update next_out and avail_out
-//    accordingly.  inflate() provides as much output as possible, until there
-//    is no more input data or no more space in the output buffer (see below
-//    about the flush parameter).
+// inflate 每次执行以下一个或两个动作：
 //
-//  Before the call of inflate(), the application should ensure that at least
-//  one of the actions is possible, by providing more input and/or consuming
-//  more output, and updating the next_* and avail_* values accordingly.
-//  The application can consume the uncompressed output when it wants, for
-//  example when the output buffer is full (avail_out == 0), or after each
-//  call of inflate(). If inflate returns Z_OK and with zero avail_out, it
-//  must be called again after making room in the output buffer because there
-//  might be more output pending.
 //
-//    If the parameter flush is set to Z_SYNC_FLUSH, inflate flushes as much
-//  output as possible to the output buffer. The flushing behavior of inflate is
-//  not specified for values of the flush parameter other than Z_SYNC_FLUSH
-//  and Z_FINISH, but the current implementation actually flushes as much output
-//  as possible anyway.
+// 从 next_in 继续解压并更新 next_in、
+// avail_in。若输出空间不足而无法处理全部输入，则记录更新后
+// 的输入位置，下次调用从该位置继续。
 //
-//    inflate() should normally be called until it returns Z_STREAM_END or an
-//  error. However if all decompression is to be performed in a single step
-//  (a single call of inflate), the parameter flush should be set to
-//  Z_FINISH. In this case all pending input is processed and all pending
-//  output is flushed; avail_out must be large enough to hold all the
-//  uncompressed data. (The size of the uncompressed data may have been saved
-//  by the compressor for this purpose.) The next operation on this stream must
-//  be inflateEnd to deallocate the decompression state. The use of Z_FINISH
-//  is never required, but can be used to inform inflate that a faster routine
-//  may be used for the single inflate() call.
 //
-//     If a preset dictionary is needed at this point (see inflateSetDictionary
-//  below), inflate sets strm-adler to the adler32 checksum of the
-//  dictionary chosen by the compressor and returns Z_NEED_DICT; otherwise
-//  it sets strm->adler to the adler32 checksum of all output produced
-//  so far (that is, total_out bytes) and returns Z_OK, Z_STREAM_END or
-//  an error code as described below. At the end of the stream, inflate()
-//  checks that its computed adler32 checksum is equal to that saved by the
-//  compressor and returns Z_STREAM_END only if the checksum is correct.
+// 从 next_out 开始生成输出并更新 next_out、
+// avail_out，直到输入耗尽或输出空间不足。flush 参数
+// 会影响此行为，详见后文。
 //
-//    inflate() returns Z_OK if some progress has been made (more input processed
-//  or more output produced), Z_STREAM_END if the end of the compressed data has
-//  been reached and all uncompressed output has been produced, Z_NEED_DICT if a
-//  preset dictionary is needed at this point, Z_DATA_ERROR if the input data was
-//  corrupted (input stream not conforming to the zlib format or incorrect
-//  adler32 checksum), Z_STREAM_ERROR if the stream structure was inconsistent
-//  (for example if next_in or next_out was NULL), Z_MEM_ERROR if there was not
-//  enough memory, Z_BUF_ERROR if no progress is possible or if there was not
-//  enough room in the output buffer when Z_FINISH is used. In the Z_DATA_ERROR
-//  case, the application may then call inflateSync to look for a good
-//  compression block.
+//
+// 调用 inflate 前，应用必须通过提供输入或消费输出，使至少
+// 一个动作可以执行，并更新 next_* 和 avail_*。应用
+// 可在缓冲区满时或每次调用后处理输出；若返回 Z_OK 且
+// avail_out 为 0，应腾出空间后继续调用，因为仍可能有待
+// 输出数据。
+//
+//
+//
+//
+// flush 为 Z_SYNC_FLUSH 时，inflate 尽
+// 量将数据刷新到输出缓冲区。接口未规定 Z_SYNC_FLUSH、
+// Z_FINISH 之外取值的刷新行为，不过当前实现仍尽量输出全部
+// 可用数据。
+//
+//
+// 通常应持续调用 inflate，直到 Z_STREAM_END
+// 或错误。若要求一次调用完成全部解压，设置 Z_FINISH，并为
+//  avail_out 提供足以容纳全部未压缩数据的空间。随后必须
+// 调用 inflateEnd 释放状态。Z_FINISH 并非必需
+// ，但可提示使用适合单次解压的更快处理过程。
+//
+//
+//
+//
+//
+//
+// 需要预置字典时，inflate 将 strm->adler 设为
+// 压缩方使用的字典校验值并返回 Z_NEED_DICT。否则该字段
+// 保存已输出数据的 Adler-32，返回 Z_OK、
+// Z_STREAM_END 或错误码。流结束时会比较计算值与归档值
+// ，仅校验一致才返回 Z_STREAM_END。
+//
+//
+//
+//
+// 返回值含义：Z_OK 表示消耗输入或生成输出；
+// Z_STREAM_END 表示压缩流结束且输出完成；
+// Z_NEED_DICT 表示需要字典；Z_DATA_ERROR
+// 表示格式损坏或 Adler-32 不匹配；
+// Z_STREAM_ERROR 表示流结构无效，例如
+// next_in 或 next_out 为空；
+// Z_MEM_ERROR 表示内存不足；Z_BUF_ERROR 表
+// 示无法继续，或 Z_FINISH 下输出空间不足。发生
+// Z_DATA_ERROR 时，可调用 inflateSync 寻
+// 找下一个有效压缩块。
+//
 //
 
 
 int inflateEnd (z_streamp strm);
 //
-//     All dynamically allocated data structures for this stream are freed.
-//   This function discards any unprocessed input and does not flush any
-//   pending output.
+// 释放此流动态分配的全部数据结构，丢弃未处理输入，不刷新待输出内容
+// 。
 //
-//     inflateEnd returns Z_OK if success, Z_STREAM_ERROR if the stream state
-//   was inconsistent. In the error case, msg may be set but then points to a
-//   static string (which must not be deallocated).
+//
+// inflateEnd 成功返回 Z_OK，流状态不一致时返回
+// Z_STREAM_ERROR。出错时 msg 可能指向静态字符串
+// ，不得释放该字符串。
 
-                        // Advanced functions 
+                        // 高级函数。
 
-//  The following functions are needed only in some special applications.
+// 以下函数仅用于部分特殊应用。
 
 
 
@@ -386,57 +386,57 @@ int inflateSetDictionary (z_streamp strm,
                                              const Byte *dictionary,
                                              uInt  dictLength);
 //
-//     Initializes the decompression dictionary from the given uncompressed byte
-//   sequence. This function must be called immediately after a call of inflate
-//   if this call returned Z_NEED_DICT. The dictionary chosen by the compressor
-//   can be determined from the Adler32 value returned by this call of
-//   inflate. The compressor and decompressor must use exactly the same
-//   dictionary. 
+// 用给定的未压缩字节序列初始化解压字典。inflate 返回
+// Z_NEED_DICT 后必须立即调用此函数；可根据
+// inflate 返回的 Adler32 值识别所需字典。压缩和解
+// 压必须使用完全相同的字典。
 //
-//     inflateSetDictionary returns Z_OK if success, Z_STREAM_ERROR if a
-//   parameter is invalid (such as NULL dictionary) or the stream state is
-//   inconsistent, Z_DATA_ERROR if the given dictionary doesn't match the
-//   expected one (incorrect Adler32 value). inflateSetDictionary does not
-//   perform any decompression: this will be done by subsequent calls of
-//   inflate().
+//
+//
+// inflateSetDictionary 成功返回 Z_OK；参
+// 数无效（如字典为空）或流状态不一致时返回
+// Z_STREAM_ERROR；字典 Adler32 不匹配时返回
+//  Z_DATA_ERROR。此函数不执行解压，解压由后续
+// inflate 调用完成。
+//
 
 
 int inflateSync (z_streamp strm);
-// 
-//    Skips invalid compressed data until a full flush point can be found, or until all
-//  available input is skipped. No output is provided.
 //
-//    inflateSync returns Z_OK if a full flush point has been found, Z_BUF_ERROR
-//  if no more input was provided, Z_DATA_ERROR if no flush point has been found,
-//  or Z_STREAM_ERROR if the stream structure was inconsistent. In the success
-//  case, the application may save the current current value of total_in which
-//  indicates where valid compressed data was found. In the error case, the
-//  application may repeatedly call inflateSync, providing more input each time,
-//  until success or end of the input data.
+// 跳过无效压缩输入，直到找到完整刷新点或全部可用输入均已跳过；不产
+// 生输出。
+//
+// inflateSync 找到完整刷新点时返回 Z_OK，无输入时
+// 返回 Z_BUF_ERROR，未找到刷新点时返回
+// Z_DATA_ERROR，流结构无效时返回
+// Z_STREAM_ERROR。成功后可保存 total_in 以
+// 记录有效数据位置；失败后可反复提供更多输入并重试，直到成功或输入
+// 结束。
+//
 
 
 int inflateReset (z_streamp strm);
-//     This function is equivalent to inflateEnd followed by inflateInit,
-//   but does not free and reallocate all the internal decompression state.
-//   The stream will keep attributes that may have been set by inflateInit2.
+// 此函数相当于先 inflateEnd 再 inflateInit
+// ，但不释放并重新分配内部解压状态，且保留
+// inflateInit2 所设置的属性。
 //
-//      inflateReset returns Z_OK if success, or Z_STREAM_ERROR if the source
-//   stream state was inconsistent (such as zalloc or state being NULL).
+// inflateReset 成功返回 Z_OK；源流状态不一致时（如 zalloc
+// 或 state 为空）返回 Z_STREAM_ERROR。
 //
 
 
 
-// checksum functions
-// These functions are not related to compression but are exported
-// anyway because they might be useful in applications using the
-// compression library.
+// 校验和函数。
+// 这些函数虽不直接执行压缩，仍作为接口导出，方便压缩库使用方进行数
+// 据校验。
+//
 
 uLong adler32 (uLong adler, const Byte *buf, uInt len);
-//     Update a running Adler-32 checksum with the bytes buf[0..len-1] and
-//   return the updated checksum. If buf is NULL, this function returns
-//   the required initial value for the checksum.
-//   An Adler-32 checksum is almost as reliable as a CRC32 but can be computed
-//   much faster. Usage example:
+// 用 buf[0..len-1] 增量更新 Adler-32 并返
+// 回新值；buf 为空时返回校验和的初始值。
+//
+// Adler-32 的可靠性接近 CRC32，计算速度更快。以下为
+// 使用示例：
 //
 //     uLong adler = adler32(0L, Z_NULL, 0);
 //
@@ -446,11 +446,11 @@ uLong adler32 (uLong adler, const Byte *buf, uInt len);
 //     if (adler != original_adler) error();
 
 uLong ucrc32   (uLong crc, const Byte *buf, uInt len);
-//     Update a running crc with the bytes buf[0..len-1] and return the updated
-//   crc. If buf is NULL, this function returns the required initial value
-//   for the crc. Pre- and post-conditioning (one's complement) is performed
-//   within this function so it shouldn't be done by the application.
-//   Usage example:
+// 使用 buf[0..len-1] 增量更新 CRC，并返回更新后的值。
+// buf 为 NULL 时返回 CRC 所需的初始值。
+// 函数内部完成前置与后置处理（按位取反），
+// 应用程序不应重复执行这些处理。
+// 使用示例：
 //
 //     uLong crc = crc32(0L, Z_NULL, 0);
 //
@@ -476,16 +476,16 @@ typedef unsigned long  ulg;
 
 
 
-const char * const z_errmsg[10] = { // indexed by 2-zlib_error
-"need dictionary",     // Z_NEED_DICT       2
-"stream end",          // Z_STREAM_END      1
-"",                    // Z_OK              0
-"file error",          // Z_ERRNO         (-1)
-"stream error",        // Z_STREAM_ERROR  (-2)
-"data error",          // Z_DATA_ERROR    (-3)
-"insufficient memory", // Z_MEM_ERROR     (-4)
-"buffer error",        // Z_BUF_ERROR     (-5)
-"incompatible version",// Z_VERSION_ERROR (-6)
+const char * const z_errmsg[10] = { // 由 2-zlib_error 索引
+"need dictionary",     // Z_NEED_DICT = 2：需要预置字典。
+"stream end",          // Z_STREAM_END = 1：数据流结束。
+"",                    // Z_OK = 0：成功。
+"file error",          // Z_ERRNO = -1：系统错误。
+"stream error",        // Z_STREAM_ERROR = -2：流状态错误。
+"data error",          // Z_DATA_ERROR = -3：数据错误。
+"insufficient memory", // Z_MEM_ERROR = -4：内存不足。
+"buffer error",        // Z_BUF_ERROR = -5：缓冲区不足或无法继续。
+"incompatible version",// Z_VERSION_ERROR = -6：版本不兼容。
 ""};
 
 
@@ -493,33 +493,33 @@ const char * const z_errmsg[10] = { // indexed by 2-zlib_error
 
 #define ERR_RETURN(strm,err) \
   return (strm->msg = (char*)ERR_MSG(err), (err))
-// To be used only when the state is known to be valid 
+// 仅在已知状态有效时使用
 
-        // common constants
+        // 公共常量。
 
 
 #define STORED_BLOCK 0
 #define STATIC_TREES 1
 #define DYN_TREES    2
-// The three kinds of block type 
+// 三种块类型
 
 #define MIN_MATCH  3
 #define MAX_MATCH  258
-// The minimum and maximum match lengths 
+// 最小和最大匹配长度
 
-#define PRESET_DICT 0x20 // preset dictionary flag in zlib header 
+#define PRESET_DICT 0x20 // zlib 标头中预设字典标志
 
-        // target dependencies 
+        // 目标依赖关系
 
-#define OS_CODE  0x0b  // Window 95 & Windows NT
+#define OS_CODE  0x0b  // Windows 95 和 Windows NT
 
 
 
-         // functions 
+         // 函数声明。
 
 #define zmemzero(dest, len) memset(dest, 0, len)
 
-// Diagnostic functions
+// 诊断函数。
 #define LuAssert(cond,msg)
 #define LuTrace(x)
 #define LuTracev(x)
@@ -545,8 +545,8 @@ void   zcfree  (voidpf opaque, voidpf ptr);
 
 
 
-// Huffman code lookup table entry--this entry is four bytes for machines
-// that have 16-bit pointers (e.g. PC's in the small or medium model).
+// 哈夫曼查找表项；在使用 16 位指针的系统上占 4 字节，例如采
+// 用小型或中型内存模型的 PC。
 
 
 typedef struct inflate_huft_s inflate_huft;
@@ -554,45 +554,45 @@ typedef struct inflate_huft_s inflate_huft;
 struct inflate_huft_s {
   union {
     struct {
-      Byte Exop;        // number of extra bits or operation
-      Byte Bits;        // number of bits in this code or subcode
+      Byte Exop;        // 附加位数或操作码。
+      Byte Bits;        // 当前编码或子编码的位数。
     } what;
-    uInt pad;           // pad structure to a power of 2 (4 bytes for
-  } word;               //  16-bit, 8 bytes for 32-bit int's)
-  uInt base;            // literal, length base, distance base, or table offset
+    uInt pad;           // 填充结构体，使其大小为 2 的幂；16 位 int 系统上为 4 字
+  } word;               // 节，32 位 int 系统上为 8 字节。
+  uInt base;            // 字面值、长度基值、距离基值或子表偏移。
 };
 
-// Maximum size of dynamic tree.  The maximum found in a long but non-
-//   exhaustive search was 1004 huft structures (850 for length/literals
-//   and 154 for distances, the latter actually the result of an
-//   exhaustive search).  The actual maximum is not known, but the
-//   value below is more than safe.
+// 动态树的最大存储量。长时间非穷尽搜索发现最多需要 1004 个
+// huft 节点：长度/字面值用 850 个，距离用 154 个，
+// 其中距离部分为穷尽结果。真实总上限未知，下述取值留有余量。
+//
+//
 #define MANY 1440
 
 int inflate_trees_bits (
-    uInt *,                    // 19 code lengths
-    uInt *,                    // bits tree desired/actual depth
-    inflate_huft * *,       // bits tree result
-    inflate_huft *,             // space for trees
-    z_streamp);                // for messages
+    uInt *,                    // 19 个码长。
+    uInt *,                    // 码长树期望的查表位数与实际位数。
+    inflate_huft * *,       // 生成的码长树。
+    inflate_huft *,             // 树节点存储空间。
+    z_streamp);                // 用于返回错误消息。
 
 int inflate_trees_dynamic (
-    uInt,                       // number of literal/length codes
-    uInt,                       // number of distance codes
-    uInt *,                    // that many (total) code lengths
-    uInt *,                    // literal desired/actual bit depth
-    uInt *,                    // distance desired/actual bit depth
-    inflate_huft * *,       // literal/length tree result
-    inflate_huft * *,       // distance tree result
-    inflate_huft *,             // space for trees
-    z_streamp);                // for messages
+    uInt,                       // 字面值/长度编码数量。
+    uInt,                       // 距离编码数量。
+    uInt *,                    // 需要处理的码长总数。
+    uInt *,                    // 字面值树期望的查表位数与实际位数。
+    uInt *,                    // 距离树期望的查表位数与实际位数。
+    inflate_huft * *,       // 生成的字面值/长度树。
+    inflate_huft * *,       // 生成的距离树。
+    inflate_huft *,             // 树节点存储空间。
+    z_streamp);                // 用于消息
 
 int inflate_trees_fixed (
-    uInt *,                    // literal desired/actual bit depth
-    uInt *,                    // distance desired/actual bit depth
-    const inflate_huft * *,       // literal/length tree result
-    const inflate_huft * *,       // distance tree result
-    z_streamp);                // for memory allocation
+    uInt *,                    // 字面值树期望的查表位数与实际位数。
+    uInt *,                    // 距离树期望的查表位数与实际位数。
+    const inflate_huft * *,       // 生成的字面值/长度树。
+    const inflate_huft * *,       // 生成的距离树。
+    z_streamp);                // 用于内存分配
 
 
 
@@ -603,18 +603,18 @@ typedef struct inflate_blocks_state inflate_blocks_statef;
 
 inflate_blocks_statef * inflate_blocks_new (
     z_streamp z,
-    check_func c,               // check function
-    uInt w);                   // window size
+    check_func c,               // 检查功能
+    uInt w);                   // 窗口大小
 
 int inflate_blocks (
     inflate_blocks_statef *,
     z_streamp ,
-    int);                      // initial return code
+    int);                      // 初始返回码
 
 void inflate_blocks_reset (
     inflate_blocks_statef *,
     z_streamp ,
-    uLong *);                  // check value on output
+    uLong *);                  // 检查输出值
 
 int inflate_blocks_free (
     inflate_blocks_statef *,
@@ -622,8 +622,8 @@ int inflate_blocks_free (
 
 void inflate_set_dictionary (
     inflate_blocks_statef *s,
-    const Byte *d,  // dictionary
-    uInt  n);       // dictionary length
+    const Byte *d,  // 字典
+    uInt  n);       // 字典长度
 
 int inflate_blocks_sync_point (
     inflate_blocks_statef *s);
@@ -652,87 +652,87 @@ void inflate_codes_free (
 
 
 typedef enum {
-      IBM_TYPE,     // get type bits (3, including end bit)
-      IBM_LENS,     // get lengths for stored
-      IBM_STORED,   // processing stored block
-      IBM_TABLE,    // get table lengths
-      IBM_BTREE,    // get bit lengths tree for a dynamic block
-      IBM_DTREE,    // get length, distance trees for a dynamic block
-      IBM_CODES,    // processing fixed or dynamic block
-      IBM_DRY,      // output remaining window bytes
-      IBM_DONE,     // finished last block, done 
-      IBM_BAD}      // got a data error--stuck here 
+      IBM_TYPE,     // 获取类型位（3，包括结束位）
+      IBM_LENS,     // 获取存储的长度
+      IBM_STORED,   // 处理存储块
+      IBM_TABLE,    // 获取表长度
+      IBM_BTREE,    // 读取动态块的码长树。
+      IBM_DTREE,    // 获取动态块的长度、距离树
+      IBM_CODES,    // 处理固定或动态块
+      IBM_DRY,      // 输出剩余窗口字节
+      IBM_DONE,     // 完成最后一个区块，完成
+      IBM_BAD}      // 已发生数据错误，停止在此状态。
 inflate_block_mode;
 
-// inflate blocks semi-private state 
+// inflate 区块半私有状态
 struct inflate_blocks_state {
 
-  // mode 
-  inflate_block_mode  mode;     // current inflate_block mode 
+  // 模式
+  inflate_block_mode  mode;     // 当前的 inflate_block 模式
 
-  // mode dependent information 
+  // 模式相关信息
   union {
-    uInt left;          // if STORED, bytes left to copy 
+    uInt left;          // STORED 状态下还需要复制的字节数。
     struct {
-      uInt table;               // table lengths (14 bits) 
-      uInt index;               // index into blens (or border)
-      uInt *blens;             // bit lengths of codes
-      uInt bb;                  // bit length tree depth 
-      inflate_huft *tb;         // bit length decoding tree 
-    } trees;            // if DTREE, decoding info for trees 
+      uInt table;               // 表长度（14 位）
+      uInt index;               // 在 blens 或 border 中的索引。
+      uInt *blens;             // 代码的位长度
+      uInt bb;                  // 位长树深度
+      inflate_huft *tb;         // 位长解码树
+    } trees;            // DTREE 状态下树的解码信息。
     struct {
       inflate_codes_statef 
          *codes;
-    } decode;           // if CODES, current state 
-  } sub;                // submode
-  uInt last;            // true if this block is the last block 
+    } decode;           // CODES 状态下当前编码的处理状态。
+  } sub;                // 子模式
+  uInt last;            // 如果该块是最后一个块则为 true
 
-  // mode independent information 
-  uInt bitk;            // bits in bit buffer 
-  uLong bitb;           // bit buffer 
-  inflate_huft *hufts;  // single malloc for tree space 
-  Byte *window;        // sliding window 
-  Byte *end;           // one byte after sliding window 
-  Byte *read;          // window read pointer 
-  Byte *write;         // window write pointer 
-  check_func checkfn;   // check function 
-  uLong check;          // check on output 
+  // 模式独立信息
+  uInt bitk;            // 位缓冲区中的位
+  uLong bitb;           // 位缓冲器
+  inflate_huft *hufts;  // 用于树节点的一次性内存分配。
+  Byte *window;        // 滑动窗
+  Byte *end;           // 滑动窗口末尾之后的位置。
+  Byte *read;          // 窗口读指针
+  Byte *write;         // 窗口写指针
+  check_func checkfn;   // 检查功能
+  uLong check;          // 检查输出
 
 };
 
 
-// defines for inflate input/output
-//   update pointers and return 
+// inflate 输入输出相关宏定义。
+// 更新指针并返回
 #define UPDBITS {s->bitb=b;s->bitk=k;}
 #define UPDIN {z->avail_in=n;z->total_in+=(uLong)(p-z->next_in);z->next_in=p;}
 #define UPDOUT {s->write=q;}
 #define UPDATE {UPDBITS UPDIN UPDOUT}
 #define LEAVE {UPDATE return inflate_flush(s,z,r);}
-//   get bytes and bits 
+// 获取字节和位
 #define LOADIN {p=z->next_in;n=z->avail_in;b=s->bitb;k=s->bitk;}
 #define NEEDBYTE {if(n)r=Z_OK;else LEAVE}
 #define NEXTBYTE (n--,*p++)
 #define NEEDBITS(j) {while(k<(j)){NEEDBYTE;b|=((uLong)NEXTBYTE)<<k;k+=8;}}
 #define DUMPBITS(j) {b>>=(j);k-=(j);}
-//   output bytes 
+// 输出字节
 #define WAVAIL (uInt)(q<s->read?s->read-q-1:s->end-q)
 #define LOADOUT {q=s->write;m=(uInt)WAVAIL;m;}
 #define WRAP {if(q==s->end&&s->read!=s->window){q=s->window;m=(uInt)WAVAIL;}}
 #define FLUSH {UPDOUT r=inflate_flush(s,z,r); LOADOUT}
 #define NEEDOUT {if(m==0){WRAP if(m==0){FLUSH WRAP if(m==0) LEAVE}}r=Z_OK;}
 #define OUTBYTE(a) {*q++=(Byte)(a);m--;}
-//   load local pointers 
+// 加载本地指针
 #define LOAD {LOADIN LOADOUT}
 
-// masks for lower bits (size given to avoid silly warnings with Visual C++) 
-// And'ing with mask[n] masks the lower n bits
+// 低位掩码；显式指定数组长度以避免 Visual C++ 警告。
+// 与 mask[n] 按位与运算可取出最低 n 位。
 const uInt inflate_mask[17] = {
     0x0000,
     0x0001, 0x0003, 0x0007, 0x000f, 0x001f, 0x003f, 0x007f, 0x00ff,
     0x01ff, 0x03ff, 0x07ff, 0x0fff, 0x1fff, 0x3fff, 0x7fff, 0xffff
 };
 
-// copy as much as possible from the sliding window to the output area
+// 尽可能多地从滑动窗口复制到输出区域
 int inflate_flush (inflate_blocks_statef *, z_streamp, int);
 
 int inflate_fast (uInt, uInt, const inflate_huft *, const inflate_huft *, inflate_blocks_statef *, z_streamp );
@@ -888,67 +888,67 @@ const inflate_huft fixed_td[] = {
 
 
 
-// copy as much as possible from the sliding window to the output area
+// 尽可能多地从滑动窗口复制到输出区域
 int inflate_flush(inflate_blocks_statef *s,z_streamp z,int r)
 {
   uInt n;
   Byte *p;
   Byte *q;
 
-  // local copies of source and destination pointers 
+  // 源指针和目标指针的本地副本
   p = z->next_out;
   q = s->read;
 
-  // compute number of bytes to copy as far as end of window 
+  // 计算要复制到窗口末尾的字节数
   n = (uInt)((q <= s->write ? s->write : s->end) - q);
   if (n > z->avail_out) n = z->avail_out;
   if (n && r == Z_BUF_ERROR) r = Z_OK;
 
-  // update counters
+  // 更新计数器
   z->avail_out -= n;
   z->total_out += n;
 
-  // update check information 
+  // 更新检查信息
   if (s->checkfn != Z_NULL)
     z->adler = s->check = (*s->checkfn)(s->check, q, n);
 
-  // copy as far as end of window 
-  if (n!=0)          // check for n!=0 to avoid waking up CodeGuard
+  // 复制到窗口末尾
+  if (n!=0)          // 检查 n!=0 以避免唤醒 CodeGuard
   { memcpy(p, q, n);
     p += n;
     q += n;
   }
 
-  // see if more to copy at beginning of window
+  // 查看是否有更多内容要复制到窗口开头
   if (q == s->end)
   {
-    // wrap pointers 
+    // 将循环窗口指针绕回起点。
     q = s->window;
     if (s->write == s->end)
       s->write = s->window;
 
-    // compute bytes to copy 
+    // 计算要复制的字节
     n = (uInt)(s->write - q);
     if (n > z->avail_out) n = z->avail_out;
     if (n && r == Z_BUF_ERROR) r = Z_OK;
 
-    // update counters 
+    // 更新计数器
     z->avail_out -= n;
     z->total_out += n;
 
-    // update check information 
+    // 更新检查信息
     if (s->checkfn != Z_NULL)
       z->adler = s->check = (*s->checkfn)(s->check, q, n);
 
-    // copy
+    // 复制
     if (n!=0) {memcpy(p,q,n); p+=n; q+=n;}
   }
 
-  // update pointers
+  // 更新指针
   z->next_out = p;
   s->read = q;
 
-  // done
+  // 完成
   return r;
 }
 
@@ -957,48 +957,48 @@ int inflate_flush(inflate_blocks_statef *s,z_streamp z,int r)
 
 
 
-// simplify the use of the inflate_huft type with some defines
+// 通过一些定义简化 inflate_huft 类型的使用
 #define exop word.what.Exop
 #define bits word.what.Bits
 
-typedef enum {        // waiting for "i:"=input, "o:"=output, "x:"=nothing 
-      START,    // x: set up for LEN 
-      LEN,      // i: get length/literal/eob next 
-      LENEXT,   // i: getting length extra (have base) 
-      DIST,     // i: get distance next 
-      DISTEXT,  // i: getting distance extra 
-      COPY,     // o: copying bytes in window, waiting for space
-      LIT,      // o: got literal, waiting for output space 
-      WASH,     // o: got eob, possibly still output waiting 
-      END,      // x: got eob and all data flushed 
-      BADCODE}  // x: got error 
+typedef enum {        // 等待“i:”=输入，“o:”=输出，“x:”=无
+      START,    // x：为 LEN 设置
+      LEN,      // i：接下来获取长度/字面值/eob
+      LENEXT,   // i：已取得长度基值，继续读取长度附加位。
+      DIST,     // i：下一步获取距离
+      DISTEXT,  // i：继续读取距离附加位。
+      COPY,     // o：在窗口中复制字节，等待空间
+      LIT,      // o：已获取字面值，正在等待输出空间
+      WASH,     // o：得到 eob，可能仍在输出等待
+      END,      // x：获得 eob 并刷新所有数据
+      BADCODE}  // x：出现错误
 inflate_codes_mode;
 
-// inflate codes private state
+// inflate 编码处理的私有状态。
 struct inflate_codes_state {
 
-  // mode 
-  inflate_codes_mode mode;      // current inflate_codes mode 
+  // 模式
+  inflate_codes_mode mode;      // 当前的 inflate_codes 模式
 
-  // mode dependent information 
+  // 模式相关信息
   uInt len;
   union {
     struct {
-      const inflate_huft *tree;       // pointer into tree 
-      uInt need;                // bits needed 
-    } code;             // if LEN or DIST, where in tree 
-    uInt lit;           // if LIT, literal 
+      const inflate_huft *tree;       // 指向树的指针
+      uInt need;                // 需要位
+    } code;             // 如果是 LEN 或 DIST，则在树中的哪个位置
+    uInt lit;           // 如果 LIT，则为字面值
     struct {
-      uInt get;                 // bits to get for extra 
-      uInt dist;                // distance back to copy from 
-    } copy;             // if EXT or COPY, where and how much 
-  } sub;                // submode
+      uInt get;                 // 需要读取的附加位数。
+      uInt dist;                // 回溯复制的距离。
+    } copy;             // EXT 或 COPY 状态下要复制的位置和长度。
+  } sub;                // 子模式
 
-  // mode independent information 
-  Byte lbits;           // ltree bits decoded per branch 
-  Byte dbits;           // dtree bits decoder per branch 
-  const inflate_huft *ltree;          // literal/length/eob tree
-  const inflate_huft *dtree;          // distance tree
+  // 模式独立信息
+  Byte lbits;           // 字面值树每次分支解码的位数。
+  Byte dbits;           // 距离树每次分支解码的位数。
+  const inflate_huft *ltree;          // 字面值/长度/eob 树
+  const inflate_huft *dtree;          // 距离树
 
 };
 
@@ -1006,7 +1006,7 @@ struct inflate_codes_state {
 inflate_codes_statef *inflate_codes_new(
 uInt bl, uInt bd,
 const inflate_huft *tl,
-const inflate_huft *td, // need separate declaration for Borland C++
+const inflate_huft *td, // Borland C++ 需要单独声明
 z_streamp z)
 {
   inflate_codes_statef *c;
@@ -1027,25 +1027,25 @@ z_streamp z)
 
 int inflate_codes(inflate_blocks_statef *s, z_streamp z, int r)
 {
-  uInt j;               // temporary storage
-  const inflate_huft *t;      // temporary pointer
-  uInt e;               // extra bits or operation
-  uLong b;              // bit buffer
-  uInt k;               // bits in bit buffer
-  Byte *p;             // input data pointer
-  uInt n;               // bytes available there
-  Byte *q;             // output window write pointer
-  uInt m;               // bytes to end of window or read pointer
-  Byte *f;             // pointer to copy strings from
-  inflate_codes_statef *c = s->sub.decode.codes;  // codes state
+  uInt j;               // 临时储存
+  const inflate_huft *t;      // 临时指针
+  uInt e;               // 额外的位或操作
+  uLong b;              // 位缓冲器
+  uInt k;               // 位缓冲区中的位
+  Byte *p;             // 输入数据指针
+  uInt n;               // 那里可用的字节数
+  Byte *q;             // 输出窗口写指针
+  uInt m;               // 到窗口末尾或读指针的字节
+  Byte *f;             // 从中复制字符串的指针
+  inflate_codes_statef *c = s->sub.decode.codes;  // 编码处理状态。
 
-  // copy input/output information to locals (UPDATE macro restores)
+  // 将输入输出信息载入局部变量；UPDATE 宏负责写回。
   LOAD
 
-  // process input and output based on current state
+  // 根据当前状态处理输入和输出
   for(;;) switch (c->mode)
-  {             // waiting for "i:"=input, "o:"=output, "x:"=nothing
-    case START:         // x: set up for LEN
+  {             // 等待“i:”=输入，“o:”=输出，“x:”=无
+    case START:         // x：为 LEN 设置
 #ifndef SLOW
       if (m >= 258 && n >= 10)
       {
@@ -1058,17 +1058,17 @@ int inflate_codes(inflate_blocks_statef *s, z_streamp z, int r)
           break;
         }
       }
-#endif // !SLOW
+#endif // 非 SLOW 编译分支。
       c->sub.code.need = c->lbits;
       c->sub.code.tree = c->ltree;
       c->mode = LEN;
-    case LEN:           // i: get length/literal/eob next
+    case LEN:           // i：接下来获取长度/字面值/eob
       j = c->sub.code.need;
       NEEDBITS(j)
       t = c->sub.code.tree + ((uInt)b & inflate_mask[j]);
       DUMPBITS(t->bits)
       e = (uInt)(t->exop);
-      if (e == 0)               // literal 
+      if (e == 0)               // 字面值字节。
       {
         c->sub.lit = t->base;
         LuTracevv((stderr, t->base >= 0x20 && t->base < 0x7f ?
@@ -1077,30 +1077,30 @@ int inflate_codes(inflate_blocks_statef *s, z_streamp z, int r)
         c->mode = LIT;
         break;
       }
-      if (e & 16)               // length 
+      if (e & 16)               // 长度
       {
         c->sub.copy.get = e & 15;
         c->len = t->base;
         c->mode = LENEXT;
         break;
       }
-      if ((e & 64) == 0)        // next table 
+      if ((e & 64) == 0)        // 进入下一级查找表。
       {
         c->sub.code.need = e;
         c->sub.code.tree = t + t->base;
         break;
       }
-      if (e & 32)               // end of block 
+      if (e & 32)               // 块结束
       {
         LuTracevv((stderr, "inflate:         end of block\n"));
         c->mode = WASH;
         break;
       }
-      c->mode = BADCODE;        // invalid code 
+      c->mode = BADCODE;        // 无效代码
       z->msg = (char*)"invalid literal/length code";
       r = Z_DATA_ERROR;
       LEAVE
-    case LENEXT:        // i: getting length extra (have base) 
+    case LENEXT:        // i：已取得长度基值，继续读取长度附加位。
       j = c->sub.copy.get;
       NEEDBITS(j)
       c->len += (uInt)b & inflate_mask[j];
@@ -1109,40 +1109,40 @@ int inflate_codes(inflate_blocks_statef *s, z_streamp z, int r)
       c->sub.code.tree = c->dtree;
       LuTracevv((stderr, "inflate:         length %u\n", c->len));
       c->mode = DIST;
-    case DIST:          // i: get distance next 
+    case DIST:          // i：下一步获取距离
       j = c->sub.code.need;
       NEEDBITS(j)
       t = c->sub.code.tree + ((uInt)b & inflate_mask[j]);
       DUMPBITS(t->bits)
       e = (uInt)(t->exop);
-      if (e & 16)               // distance 
+      if (e & 16)               // 距离
       {
         c->sub.copy.get = e & 15;
         c->sub.copy.dist = t->base;
         c->mode = DISTEXT;
         break;
       }
-      if ((e & 64) == 0)        // next table 
+      if ((e & 64) == 0)        // 进入下一级查找表。
       {
         c->sub.code.need = e;
         c->sub.code.tree = t + t->base;
         break;
       }
-      c->mode = BADCODE;        // invalid code 
+      c->mode = BADCODE;        // 无效代码
       z->msg = (char*)"invalid distance code";
       r = Z_DATA_ERROR;
       LEAVE
-    case DISTEXT:       // i: getting distance extra 
+    case DISTEXT:       // i：读取距离附加位。
       j = c->sub.copy.get;
       NEEDBITS(j)
       c->sub.copy.dist += (uInt)b & inflate_mask[j];
       DUMPBITS(j)
       LuTracevv((stderr, "inflate:         distance %u\n", c->sub.copy.dist));
       c->mode = COPY;
-    case COPY:          // o: copying bytes in window, waiting for space 
+    case COPY:          // o：在窗口中复制字节，等待空间
       f = q - c->sub.copy.dist;
-      while (f < s->window)             // modulo window size-"while" instead
-        f += s->end - s->window;        // of "if" handles invalid distances 
+      while (f < s->window)             // 按窗口大小循环回绕；使用 while 而非 if，
+        f += s->end - s->window;        // 以处理异常距离需要多次回绕的情况。
       while (c->len)
       {
         NEEDOUT
@@ -1153,18 +1153,18 @@ int inflate_codes(inflate_blocks_statef *s, z_streamp z, int r)
       }
       c->mode = START;
       break;
-    case LIT:           // o: got literal, waiting for output space 
+    case LIT:           // o：已获取字面值，正在等待输出空间
       NEEDOUT
       OUTBYTE(c->sub.lit)
       c->mode = START;
       break;
-    case WASH:          // o: got eob, possibly more output 
-      if (k > 7)        // return unused byte, if any 
+    case WASH:          // o：得到 eob，可能有更多输出
+      if (k > 7)        // 若有多读而未使用的字节，则退回输入。
       {
-        //Assert(k < 16, "inflate_codes grabbed too many bytes")
+        // Assert(k < 16, "inflate_codes 抓取了太多字节")
         k -= 8;
         n++;
-        p--;            // can always return one 
+        p--;            // 此处总能退回一个字节。
       }
       FLUSH
       if (s->read != s->write)
@@ -1173,7 +1173,7 @@ int inflate_codes(inflate_blocks_statef *s, z_streamp z, int r)
     case END:
       r = Z_STREAM_END;
       LEAVE
-    case BADCODE:       // x: got error
+    case BADCODE:       // x：出现错误
       r = Z_DATA_ERROR;
       LEAVE
     default:
@@ -1190,60 +1190,60 @@ void inflate_codes_free(inflate_codes_statef *c,z_streamp z)
 
 
 
-// infblock.c -- interpret and process block types to last block
-// Copyright (C) 1995-1998 Mark Adler
-// For conditions of distribution and use, see copyright notice in zlib.h
+// infblock.c——解释和处理块类型到最后一个块
+// 版权所有（C）1995—1998 Mark Adler。
+// 有关分发和使用条件，请参阅 zlib.h 中的版权声明
 
-//struct inflate_codes_state {int dummy;}; // for buggy compilers 
+// struct inflate_codes_state {int dummy;}; // 对于有缺陷的编译器
 
 
 
-// Table for deflate from PKZIP's appnote.txt.
-const uInt border[] = { // Order of the bit length code lengths
+// 来自 PKZIP 的 appnote.txt 的 deflate 表。
+const uInt border[] = { // 位长代码长度的顺序
         16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15};
 
 //
-// Notes beyond the 1.93a appnote.txt:
+// 1.93a appnote.txt 之外的注释：
 //
-// 1. Distance pointers never point before the beginning of the output stream.
-// 2. Distance pointers can point back across blocks, up to 32k away.
-// 3. There is an implied maximum of 7 bits for the bit length table and
-//    15 bits for the actual data.
-// 4. If only one code exists, then it is encoded using one bit.  (Zero
-//    would be more efficient, but perhaps a little confusing.)  If two
-//    codes exist, they are coded using one bit each (0 and 1).
-// 5. There is no way of sending zero distance codes--a dummy must be
-//    sent if there are none.  (History: a pre 2.0 version of PKZIP would
-//    store blocks with no distance codes, but this was discovered to be
-//    too harsh a criterion.)  Valid only for 1.93a.  2.04c does allow
-//    zero distance codes, which is sent as one code of zero bits in
-//    length.
-// 6. There are up to 286 literal/length codes.  Code 256 represents the
-//    end-of-block.  Note however that the static length tree defines
-//    288 codes just to fill out the Huffman codes.  Codes 286 and 287
-//    cannot be used though, since there is no length base or extra bits
-//    defined for them.  Similarily, there are up to 30 distance codes.
-//    However, static trees define 32 codes (all 5 bits) to fill out the
-//    Huffman codes, but the last two had better not show up in the data.
-// 7. Unzip can check dynamic Huffman blocks for complete code sets.
-//    The exception is that a single code would not be complete (see #4).
-// 8. The five bits following the block type is really the number of
-//    literal codes sent minus 257.
-// 9. Length codes 8,16,16 are interpreted as 13 length codes of 8 bits
-//    (1+6+6).  Therefore, to output three times the length, you output
-//    three codes (1+1+1), whereas to output four times the same length,
-//    you only need two codes (1+3).  Hmm.
-//10. In the tree reconstruction algorithm, Code = Code + Increment
-//    only if BitLength(i) is not zero.  (Pretty obvious.)
-//11. Correction: 4 Bits: # of Bit Length codes - 4     (4 - 19)
-//12. Note: length code 284 can represent 227-258, but length code 285
-//    really is 258.  The last length deserves its own, short code
-//    since it gets used a lot in very redundant files.  The length
-//    258 is special since 258 - 3 (the min match length) is 255.
-//13. The literal/length and distance code bit lengths are read as a
-//    single stream of lengths.  It is possible (and advantageous) for
-//    a repeat code (16, 17, or 18) to go across the boundary between
-//    the two sets of lengths.
+// 1. 距离指针永远不会指向输出流开头之前。
+// 2.距离指针可以跨区块指向回，最远可达32k。
+// 码长表的最大码长为 7 位，实际数据编码的最大码长为 15 位。
+//
+// 若只有一个编码，也用 1 位表示，避免零位编码带来的歧义；若有两
+// 个编码，则分别用单个位 0、1 表示。
+//
+// 1.93a 规则不允许零个距离编码，没有实际距离编码时必须发送占
+// 位项。PKZIP 2.0 之前曾把没有距离编码的块直接存储，该限
+// 制过严。2.04c 则允许零个距离编码，采用一个码长为 0 的编
+// 码表示。
+//
+//
+// 字面值/长度最多 286 个编码，256 为块结束。静态树包含
+// 288 个编码以补全哈夫曼编码，但 286、287 未定义基值或
+// 附加位，不能出现在数据中。距离最多 30 个编码，静态树补齐为
+// 32 个 5 位编码，最后两个同样不得实际使用。
+//
+//
+//
+// 解压器可以检查动态哈夫曼块的编码集合是否完整；只有一个编码时属于
+// 例外，见第 4 条。
+// 块类型之后的 5 位表示字面值/长度编码数量减去 257。
+//
+// 码长序列 8,16,16 可表示 13 个长度为 8 的编码（1
+// +6+6）。因此重复三次同一码长需要三个编码（1+1+1），重复
+// 四次反而只需两个（1+3）。
+//
+// 10、树重建算法中，Code = Code + Increment
+// 仅当 BitLength(i) 不为零时。  （非常明显。）
+// 11. 修正：4 位：位长代码的数量 - 4 (4 - 19)
+// 长度编码 284 可表示 227..258，而 285 专用于
+// 258。高度重复的数据经常使用最大匹配长度，因此单独为 258
+// 分配短编码；258 减去最小长度 3 等于 255。
+//
+// 字面值/长度与距离的码长作为一个连续序列读取，重复编码 16、1
+// 7、18 可以跨越两组码长之间的边界，这样通常更节省空间。
+//
+//
 
 
 void inflate_blocks_reset(inflate_blocks_statef *s, z_streamp z, uLong *c)
@@ -1294,18 +1294,18 @@ inflate_blocks_statef *inflate_blocks_new(z_streamp z, check_func c, uInt w)
 
 int inflate_blocks(inflate_blocks_statef *s, z_streamp z, int r)
 {
-  uInt t;               // temporary storage
-  uLong b;              // bit buffer
-  uInt k;               // bits in bit buffer
-  Byte *p;             // input data pointer
-  uInt n;               // bytes available there
-  Byte *q;             // output window write pointer
-  uInt m;               // bytes to end of window or read pointer 
+  uInt t;               // 临时储存
+  uLong b;              // 位缓冲器
+  uInt k;               // 位缓冲区中的位
+  Byte *p;             // 输入数据指针
+  uInt n;               // 那里可用的字节数
+  Byte *q;             // 输出窗口写指针
+  uInt m;               // 到窗口末尾或读指针的字节
 
-  // copy input/output information to locals (UPDATE macro restores) 
+  // 将输入/输出信息复制到本地（更新宏恢复）
   LOAD
 
-  // process input based on current state 
+  // 根据当前状态处理输入
   for(;;) switch (s->mode)
   {
     case IBM_TYPE:
@@ -1314,15 +1314,15 @@ int inflate_blocks(inflate_blocks_statef *s, z_streamp z, int r)
       s->last = t & 1;
       switch (t >> 1)
       {
-        case 0:                         // stored 
+        case 0:                         // 已存储
           LuTracev((stderr, "inflate:     stored block%s\n",
                  s->last ? " (last)" : ""));
           DUMPBITS(3)
-          t = k & 7;                    // go to byte boundary 
+          t = k & 7;                    // 转到字节边界
           DUMPBITS(t)
-          s->mode = IBM_LENS;               // get length of stored block
+          s->mode = IBM_LENS;               // 获取存储块的长度
           break;
-        case 1:                         // fixed 
+        case 1:                         // 固定的
           LuTracev((stderr, "inflate:     fixed codes block%s\n",
                  s->last ? " (last)" : ""));
           {
@@ -1340,13 +1340,13 @@ int inflate_blocks(inflate_blocks_statef *s, z_streamp z, int r)
           DUMPBITS(3)
           s->mode = IBM_CODES;
           break;
-        case 2:                         // dynamic 
+        case 2:                         // 动态
           LuTracev((stderr, "inflate:     dynamic codes block%s\n",
                  s->last ? " (last)" : ""));
           DUMPBITS(3)
           s->mode = IBM_TABLE;
           break;
-        case 3:                         // illegal
+        case 3:                         // 非法的
           DUMPBITS(3)
           s->mode = IBM_BAD;
           z->msg = (char*)"invalid block type";
@@ -1364,7 +1364,7 @@ int inflate_blocks(inflate_blocks_statef *s, z_streamp z, int r)
         LEAVE
       }
       s->sub.left = (uInt)b & 0xffff;
-      b = k = 0;                      // dump bits 
+      b = k = 0;                      // 转储位
       LuTracev((stderr, "inflate:       stored length %u\n", s->sub.left));
       s->mode = s->sub.left ? IBM_STORED : (s->last ? IBM_DRY : IBM_TYPE);
       break;
@@ -1388,7 +1388,7 @@ int inflate_blocks(inflate_blocks_statef *s, z_streamp z, int r)
     case IBM_TABLE:
       NEEDBITS(14)
       s->sub.trees.table = t = (uInt)b & 0x3fff;
-      // remove this section to workaround bug in pkzip
+      // 删除此部分以解决 pkzip 中的错误
       if ((t & 0x1f) > 29 || ((t >> 5) & 0x1f) > 29)
       {
         s->mode = IBM_BAD;
@@ -1396,7 +1396,7 @@ int inflate_blocks(inflate_blocks_statef *s, z_streamp z, int r)
         r = Z_DATA_ERROR;
         LEAVE
       }
-      // end remove
+      // 结束删除
       t = 258 + (t & 0x1f) + ((t >> 5) & 0x1f);
       if ((s->sub.trees.blens = (uInt*)ZALLOC(z, t, sizeof(uInt))) == Z_NULL)
       {
@@ -1449,7 +1449,7 @@ int inflate_blocks(inflate_blocks_statef *s, z_streamp z, int r)
           DUMPBITS(t)
           s->sub.trees.blens[s->sub.trees.index++] = c;
         }
-        else // c == 16..18 
+        else // c 为重复码长编码，取值 16..18。
         {
           i = c == 18 ? 7 : c - 14;
           j = c == 18 ? 11 : 3;
@@ -1481,8 +1481,8 @@ int inflate_blocks(inflate_blocks_statef *s, z_streamp z, int r)
         inflate_huft *tl, *td;
         inflate_codes_statef *c;
 
-        bl = 9;         // must be <= 9 for lookahead assumptions 
-        bd = 6;         // must be <= 9 for lookahead assumptions
+        bl = 9;         // 对于前瞻假设，必须 <= 9
+        bd = 6;         // 对于前瞻假设，必须 <= 9
         t = s->sub.trees.table;
         t = inflate_trees_dynamic(257 + (t & 0x1f), 1 + ((t >> 5) & 0x1f),
                                   s->sub.trees.blens, &bl, &bd, &tl, &td,
@@ -1553,136 +1553,136 @@ int inflate_blocks_free(inflate_blocks_statef *s, z_streamp z)
 
 
 
-// inftrees.c -- generate Huffman trees for efficient decoding
-// Copyright (C) 1995-1998 Mark Adler
-// For conditions of distribution and use, see copyright notice in zlib.h
+// inftrees.c——生成哈夫曼树以进行高效解码
+// 版权所有（C）1995—1998 Mark Adler。
+// 有关分发和使用条件，请参阅 zlib.h 中的版权声明
 //
 
 
 
 extern const char inflate_copyright[] =
    " inflate 1.1.3 Copyright 1995-1998 Mark Adler ";
-// If you use the zlib library in a product, an acknowledgment is welcome
-// in the documentation of your product. If for some reason you cannot
-// include such an acknowledgment, I would appreciate that you keep this
-// copyright string in the executable of your product.
+// 作者欢迎在产品文档中注明使用 zlib；若无法致谢，则希望保留产
+// 品可执行文件中的版权字符串。
+//
+//
 
 
 
 int huft_build (
-    uInt *,            // code lengths in bits
-    uInt,               // number of codes
-    uInt,               // number of "simple" codes
-    const uInt *,      // list of base values for non-simple codes
-    const uInt *,      // list of extra bits for non-simple codes
-    inflate_huft **,// result: starting table
-    uInt *,            // maximum lookup bits (returns actual) 
-    inflate_huft *,     // space for trees 
-    uInt *,             // hufts used in space 
-    uInt * );         // space for values 
+    uInt *,            // 各编码的位长。
+    uInt,               // 编码数量。
+    uInt,               // 简单编码数量。
+    const uInt *,      // 非简单代码的基值列表
+    const uInt *,      // 非简单代码的额外位列表
+    inflate_huft **,// 返回的首级查找表。
+    uInt *,            // 最大查表位数；返回时更新为实际值。
+    inflate_huft *,     // 树节点存储空间。
+    uInt *,             // 存储空间中已经使用的 huft 节点数。
+    uInt * );         // 用于存放符号值的工作区。
 
-// Tables for deflate from PKZIP's appnote.txt. 
-const uInt cplens[31] = { // Copy lengths for literal codes 257..285
+// 来自 PKZIP 的 appnote.txt 的 deflate 表。
+const uInt cplens[31] = { // 编码 257..285 对应的复制长度。
         3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31,
         35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258, 0, 0};
-        // see note #13 above about 258
-const uInt cplext[31] = { // Extra bits for literal codes 257..285
+        // 请参阅上面的注释 #13 约 258
+const uInt cplext[31] = { // 编码 257..285 对应的附加位数。
         0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2,
-        3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0, 112, 112}; // 112==invalid
-const uInt cpdist[30] = { // Copy offsets for distance codes 0..29
+        3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0, 112, 112}; // 112==无效
+const uInt cpdist[30] = { // 距离编码 0..29 对应的复制偏移。
         1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193,
         257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145,
         8193, 12289, 16385, 24577};
-const uInt cpdext[30] = { // Extra bits for distance codes 
+const uInt cpdext[30] = { // 距离代码的额外位
         0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6,
         7, 7, 8, 8, 9, 9, 10, 10, 11, 11,
         12, 12, 13, 13};
 
 //
-//   Huffman code decoding is performed using a multi-level table lookup.
-//   The fastest way to decode is to simply build a lookup table whose
-//   size is determined by the longest code.  However, the time it takes
-//   to build this table can also be a factor if the data being decoded
-//   is not very long.  The most common codes are necessarily the
-//   shortest codes, so those codes dominate the decoding time, and hence
-//   the speed.  The idea is you can have a shorter table that decodes the
-//   shorter, more probable codes, and then point to subsidiary tables for
-//   the longer codes.  The time it costs to decode the longer codes is
-//   then traded against the time it takes to make longer tables.
+// 哈夫曼解码采用多级查表。按最长码长创建单级表虽能最快解码，但短输
+// 入的建表耗时可能过高。短编码出现频繁，适合用较小首级表直接处理，
+// 再通过子表解码长编码，从而平衡解码速度和建表开销。
 //
-//   This results of this trade are in the variables lbits and dbits
-//   below.  lbits is the number of bits the first level table for literal/
-//   length codes can decode in one step, and dbits is the same thing for
-//   the distance codes.  Subsequent tables are also less than or equal to
-//   those sizes.  These values may be adjusted either when all of the
-//   codes are shorter than that, in which case the longest code length in
-//   bits is used, or when the shortest code is *longer* than the requested
-//   table size, in which case the length of the shortest code in bits is
-//   used.
 //
-//   There are two different values for the two tables, since they code a
-//   different number of possibilities each.  The literal/length table
-//   codes 286 possible values, or in a flat code, a little over eight
-//   bits.  The distance table codes 30 possible values, or a little less
-//   than five bits, flat.  The optimum values for speed end up being
-//   about one bit more than those, so lbits is 8+1 and dbits is 5+1.
-//   The optimum values may differ though from machine to machine, and
-//   possibly even between compilers.  Your mileage may vary.
+//
+//
+//
+//
+//
+//
+// lbits 和 dbits 分别表示字面值/长度树、距离树的首级
+// 表一次可解码的位数；后续子表不超过相同大小。如果所有编码更短，则
+// 改用最长码长；如果最短编码仍长于期望查表位数，则改用最短码长。
+//
+//
+//
+//
+//
+//
+//
+// 两类表采用不同参数，因为字面值/长度有 286 种可能值，距离有
+//  30 种，近似等长编码分别需要稍多于 8 位、稍少于 5 位。
+// 较快的查表参数通常额外增加 1 位，即 lbits=9、
+// dbits=6；最优值仍取决于机器和编译器。
+//
+//
+//
+//
 //
 
 
-// If BMAX needs to be larger than 16, then h and x[] should be uLong. 
-#define BMAX 15         // maximum bit length of any code
+// 如果BMAX需要大于16，那么h和x[]应该是uLong。
+#define BMAX 15         // 任一编码允许的最大码长。
 
 int huft_build(
-uInt *b,               // code lengths in bits (all assumed <= BMAX)
-uInt n,                 // number of codes (assumed <= 288)
-uInt s,                 // number of simple-valued codes (0..s-1)
-const uInt *d,         // list of base values for non-simple codes
-const uInt *e,         // list of extra bits for non-simple codes
-inflate_huft * *t,  // result: starting table
-uInt *m,               // maximum lookup bits, returns actual
-inflate_huft *hp,       // space for trees
-uInt *hn,               // hufts used in space
-uInt *v)               // working area: values in order of bit length
-// Given a list of code lengths and a maximum table size, make a set of
-// tables to decode that set of codes.  Return Z_OK on success, Z_BUF_ERROR
-// if the given code set is incomplete (the tables are still built in this
-// case), or Z_DATA_ERROR if the input is invalid.
+uInt *b,               // 各编码位长，假定均 <= BMAX。
+uInt n,                 // 编码数量，假定 <= 288。
+uInt s,                 // 取值为 0..s-1 的简单编码数量。
+const uInt *d,         // 非简单代码的基值列表
+const uInt *e,         // 非简单代码的额外位列表
+inflate_huft * *t,  // 返回的首级查找表。
+uInt *m,               // 最大查表位数，返回实际位数。
+inflate_huft *hp,       // 树节点存储空间。
+uInt *hn,               // 存储空间中已经使用的 huft 节点数。
+uInt *v)               // 工作区：按码长顺序排列的符号值。
+// 根据码长列表和最大表大小构建解码表。成功返回 Z_OK；编码集合
+// 不完整时仍构建表，但返回 Z_BUF_ERROR；输入无效时返回
+//  Z_DATA_ERROR。
+//
 {
 
-  uInt a;                       // counter for codes of length k
-  uInt c[BMAX+1];               // bit length count table
-  uInt f;                       // i repeats in table every f entries 
-  int g;                        // maximum code length 
-  int h;                        // table level 
-  register uInt i;              // counter, current code 
-  register uInt j;              // counter
-  register int k;               // number of bits in current code 
-  int l;                        // bits per table (returned in m) 
-  uInt mask;                    // (1 << w) - 1, to avoid cc -O bug on HP 
-  register uInt *p;            // pointer into c[], b[], or v[]
-  inflate_huft *q;              // points to current table 
-  struct inflate_huft_s r;      // table entry for structure assignment 
-  inflate_huft *u[BMAX];        // table stack 
-  register int w;               // bits before this table == (l * h) 
-  uInt x[BMAX+1];               // bit offsets, then code stack 
-  uInt *xp;                    // pointer into x 
-  int y;                        // number of dummy codes added 
-  uInt z;                       // number of entries in current table 
+  uInt a;                       // 长度为 k 的代码计数器
+  uInt c[BMAX+1];               // 位长计数表
+  uInt f;                       // i 在表中每 f 个条目重复一次
+  int g;                        // 最大码长。
+  int h;                        // 表层
+  register uInt i;              // 计数器，当前代码
+  register uInt j;              // 计数器。
+  register int k;               // 当前编码的位数。
+  int l;                        // 每个表的位数（以 m 为单位返回）
+  uInt mask;                    // (1 << w) - 1，以避免 HP 上的 cc -O 错误
+  register uInt *p;            // 指向 c[]、b[] 或 v[] 的指针
+  inflate_huft *q;              // 指向当前表
+  struct inflate_huft_s r;      // 用于结构体赋值的查找表项。
+  inflate_huft *u[BMAX];        // 表栈
+  register int w;               // 进入当前表之前已经解码的位数，等于 l*h。
+  uInt x[BMAX+1];               // 位偏移量，然后是代码堆栈
+  uInt *xp;                    // 指向 x 的指针
+  int y;                        // 为了补全树而添加的占位编码数量。
+  uInt z;                       // 当前表中的条目数
 
 
-  // Generate counts for each bit length 
+  // 生成每个位长度的计数
   p = c;
 #define C0 *p++ = 0;
 #define C2 C0 C0 C0 C0
 #define C4 C2 C2 C2 C2
-  C4; p;                          // clear c[]--assume BMAX+1 is 16
+  C4; p;                          // 清除c[]--假设BMAX+1为16
   p = b;  i = n;
   do {
-    c[*p++]++;                  // assume all entries <= BMAX 
+    c[*p++]++;                  // 假设所有条目 <= BMAX
   } while (--i);
-  if (c[0] == n)                // null input--all zero length codes 
+  if (c[0] == n)                // 空输入——所有零长度代码
   {
     *t = (inflate_huft *)Z_NULL;
     *m = 0;
@@ -1690,24 +1690,24 @@ uInt *v)               // working area: values in order of bit length
   }
 
 
-  // Find minimum and maximum length, bound *m by those 
+  // 求最短和最长码长，并将 *m 限制在该范围内。
   l = *m;
   for (j = 1; j <= BMAX; j++)
     if (c[j])
       break;
-  k = j;                        // minimum code length 
+  k = j;                        // 最小码长。
   if ((uInt)l < j)
     l = j;
   for (i = BMAX; i; i--)
     if (c[i])
       break;
-  g = i;                        // maximum code length 
+  g = i;                        // 最大码长。
   if ((uInt)l > i)
     l = i;
   *m = l;
 
 
-  // Adjust last length count to fill out codes, if needed 
+  // 必要时增加最长码长的数量，以补全编码空间。
   for (y = 1 << j; j < i; j++, y <<= 1)
     if ((y -= c[j]) < 0)
       return Z_DATA_ERROR;
@@ -1716,112 +1716,112 @@ uInt *v)               // working area: values in order of bit length
   c[i] += y;
 
 
-  // Generate starting offsets into the value table for each length 
+  // 计算每种码长在符号值表中的起始偏移。
   x[1] = j = 0;
   p = c + 1;  xp = x + 2;
-  while (--i) {                 // note that i == g from above 
+  while (--i) {                 // 请注意，上面的 i == g
     *xp++ = (j += *p++);
   }
 
 
-  // Make a table of values in order of bit lengths 
+  // 按码长顺序构建符号值表。
   p = b;  i = 0;
   do {
     if ((j = *p++) != 0)
       v[x[j]++] = i;
   } while (++i < n);
-  n = x[g];                     // set n to length of v 
+  n = x[g];                     // 将 n 设置为 v 的长度
 
 
-  // Generate the Huffman codes and for each, make the table entries 
-  x[0] = i = 0;                 // first Huffman code is zero 
-  p = v;                        // grab values in bit order 
-  h = -1;                       // no tables yet--level -1 
-  w = -l;                       // bits decoded == (l * h) 
-  u[0] = (inflate_huft *)Z_NULL;        // just to keep compilers happy 
-  q = (inflate_huft *)Z_NULL;   // ditto 
-  z = 0;                        // ditto 
+  // 生成哈夫曼代码并为每个代码创建表条目
+  x[0] = i = 0;                 // 第一个哈夫曼码为零
+  p = v;                        // 按码长顺序获取符号值。
+  h = -1;                       // 还没有表--级别-1
+  w = -l;                       // 解码的位数 == (l * h)
+  u[0] = (inflate_huft *)Z_NULL;        // 初始化以避免编译器产生未初始化警告。
+  q = (inflate_huft *)Z_NULL;   // 同上
+  z = 0;                        // 同上
 
-  // go through the bit lengths (k already is bits in shortest code) 
+  // 检查位长度（k 已经是最短代码中的位）
   for (; k <= g; k++)
   {
     a = c[k];
     while (a--)
     {
-      // here i is the Huffman code of length k bits for value *p 
-      // make tables up to required level 
+      // 这里 i 是值 *p 的长度为 k 位的哈夫曼代码
+      // 逐级构建所需的查找表。
       while (k > w + l)
       {
         h++;
-        w += l;                 // previous table always l bits 
+        w += l;                 // 前一个表总是 l 位
 
-        // compute minimum size table less than or equal to l bits
+        // 计算不超过 l 位的最小查找表。
         z = g - w;
-        z = z > (uInt)l ? l : z;        // table size upper limit 
-        if ((f = 1 << (j = k - w)) > a + 1)     // try a k-w bit table 
-        {                       // too few codes for k-w bit table 
-          f -= a + 1;           // deduct codes from patterns left 
+        z = z > (uInt)l ? l : z;        // 表大小上限
+        if ((f = 1 << (j = k - w)) > a + 1)     // 尝试 k-w 位表
+        {                       // k-w 位表代码太少
+          f -= a + 1;           // 从剩余位组合数量中扣除当前编码数。
           xp = c + k;
           if (j < z)
-            while (++j < z)     // try smaller tables up to z bits 
+            while (++j < z)     // 尝试较小的表（最多 z 位）
             {
               if ((f <<= 1) <= *++xp)
-                break;          // enough codes to use up j bits 
-              f -= *xp;         // else deduct codes from patterns
+                break;          // 编码数已足够占满 j 位的表。
+              f -= *xp;         // 否则从剩余位组合中扣除编码数。
             }
         }
-        z = 1 << j;             // table entries for j-bit table 
+        z = 1 << j;             // j 位查找表的表项数量。
 
-        // allocate new table 
-        if (*hn + z > MANY)     // (note: doesn't matter for fixed) 
-          return Z_DATA_ERROR;  // overflow of MANY 
+        // 分配新表
+        if (*hn + z > MANY)     // （注：与固定无关）
+          return Z_DATA_ERROR;  // 超过 MANY 指定的节点数量上限。
         u[h] = q = hp + *hn;
         *hn += z;
 
-        // connect to last table, if there is one 
+        // 连接到最后一个表（如果有）
         if (h)
         {
-          x[h] = i;             // save pattern for backing up
-          r.bits = (Byte)l;     // bits to dump before this table 
-          r.exop = (Byte)j;     // bits in this table 
+          x[h] = i;             // 保存当前编码模式，以便回溯。
+          r.bits = (Byte)l;     // 进入本表前已消耗的位数。
+          r.exop = (Byte)j;     // 该表中的位
           j = i >> (w - l);
-          r.base = (uInt)(q - u[h-1] - j);   // offset to this table 
-          u[h-1][j] = r;        // connect to last table 
+          r.base = (uInt)(q - u[h-1] - j);   // 到该表的偏移量
+          u[h-1][j] = r;        // 连接到最后一个表
         }
         else
-          *t = q;               // first table is returned result 
+          *t = q;               // 第一个表是返回结果
       }
 
-      // set up table entry in r 
+      // 在r中设置表条目
       r.bits = (Byte)(k - w);
       if (p >= v + n)
-        r.exop = 128 + 64;      // out of values--invalid code 
+        r.exop = 128 + 64;      // 超出值--无效代码
       else if (*p < s)
       {
-        r.exop = (Byte)(*p < 256 ? 0 : 32 + 64);     // 256 is end-of-block 
-        r.base = *p++;          // simple code is just the value 
+        r.exop = (Byte)(*p < 256 ? 0 : 32 + 64);     // 256 是块结束符
+        r.base = *p++;          // 简单编码直接使用符号值。
       }
       else
       {
-        r.exop = (Byte)(e[*p - s] + 16 + 64);// non-simple--look up in lists 
+        r.exop = (Byte)(e[*p - s] + 16 + 64);// 非简单——在列表中查找
         r.base = d[*p++ - s];
       }
 
-      // fill code-like entries with r
+      // 用 r 填充匹配当前编码模式的表项。
       f = 1 << (k - w);
       for (j = i >> w; j < z; j += f)
         q[j] = r;
 
-      // backwards increment the k-bit code i 
+      // 按反向位序递增 k 位编码 i。
       for (j = 1 << (k - 1); i & j; j >>= 1)
         i ^= j;
       i ^= j;
 
-      // backup over finished tables 
-      mask = (1 << w) - 1;      // needed on HP, cc -O bug 
+      // 处理完子表后回溯到上级表。
+      mask = (1 << w) - 1;      // HP 需要，cc -O bug
       while ((i & mask) != x[h])
       {
-        h--;                    // don't need to update q
+        h--;                    // 不需要更新q
         w -= l;
         mask = (1 << w) - 1;
       }
@@ -1829,21 +1829,21 @@ uInt *v)               // working area: values in order of bit length
   }
 
 
-  // Return Z_BUF_ERROR if we were given an incomplete table 
+  // 如果给我们一个不完整的表，则返回 Z_BUF_ERROR
   return y != 0 && g != 1 ? Z_BUF_ERROR : Z_OK;
 }
 
 
 int inflate_trees_bits(
-uInt *c,               // 19 code lengths
-uInt *bb,              // bits tree desired/actual depth
-inflate_huft * *tb, // bits tree result
-inflate_huft *hp,       // space for trees
-z_streamp z)            // for messages
+uInt *c,               // 19 个码长。
+uInt *bb,              // 码长树期望的查表位数与实际位数。
+inflate_huft * *tb, // 生成的码长树。
+inflate_huft *hp,       // 树节点存储空间。
+z_streamp z)            // 用于消息
 {
   int r;
-  uInt hn = 0;          // hufts used in space 
-  uInt *v;             // work area for huft_build 
+  uInt hn = 0;          // 已使用的 huft 节点数。
+  uInt *v;             // huft_build 的工作区
 
   if ((v = (uInt*)ZALLOC(z, 19, sizeof(uInt))) == Z_NULL)
     return Z_MEM_ERROR;
@@ -1862,25 +1862,25 @@ z_streamp z)            // for messages
 
 
 int inflate_trees_dynamic(
-uInt nl,                // number of literal/length codes
-uInt nd,                // number of distance codes
-uInt *c,               // that many (total) code lengths
-uInt *bl,              // literal desired/actual bit depth
-uInt *bd,              // distance desired/actual bit depth
-inflate_huft * *tl, // literal/length tree result
-inflate_huft * *td, // distance tree result
-inflate_huft *hp,       // space for trees
-z_streamp z)            // for messages
+uInt nl,                // 字面值/长度编码数量。
+uInt nd,                // 距离编码数量。
+uInt *c,               // 需要处理的码长总数。
+uInt *bl,              // 字面值树期望的查表位数与实际位数。
+uInt *bd,              // 距离树期望的查表位数与实际位数。
+inflate_huft * *tl, // 生成的字面值/长度树。
+inflate_huft * *td, // 生成的距离树。
+inflate_huft *hp,       // 树节点存储空间。
+z_streamp z)            // 用于消息
 {
   int r;
-  uInt hn = 0;          // hufts used in space 
-  uInt *v;             // work area for huft_build 
+  uInt hn = 0;          // 已使用的 huft 节点数。
+  uInt *v;             // huft_build 的工作区
 
-  // allocate work area 
+  // 分配工作区域
   if ((v = (uInt*)ZALLOC(z, 288, sizeof(uInt))) == Z_NULL)
     return Z_MEM_ERROR;
 
-  // build literal/length tree 
+  // 构建字面值/长度树
   r = huft_build(c, nl, 257, cplens, cplext, tl, bl, hp, &hn, v);
   if (r != Z_OK || *bl == 0)
   {
@@ -1895,7 +1895,7 @@ z_streamp z)            // for messages
     return r;
   }
 
-  // build distance tree 
+  // 构建距离树
   r = huft_build(c + nl, nd, 0, cpdist, cpdext, td, bd, hp, &hn, v);
   if (r != Z_OK || (*bd == 0 && nl > 257))
   {
@@ -1914,7 +1914,7 @@ z_streamp z)            // for messages
     return r;
   }
 
-  // done 
+  // 完成
   ZFREE(z, v);
   return Z_OK;
 }
@@ -1924,11 +1924,11 @@ z_streamp z)            // for messages
 
 
 int inflate_trees_fixed(
-uInt *bl,               // literal desired/actual bit depth
-uInt *bd,               // distance desired/actual bit depth
-const inflate_huft * * tl,     // literal/length tree result
-const inflate_huft * *td,     // distance tree result
-z_streamp )             // for memory allocation
+uInt *bl,               // 字面值树期望的查表位数与实际位数。
+uInt *bd,               // 距离树期望的查表位数与实际位数。
+const inflate_huft * * tl,     // 生成的字面值/长度树。
+const inflate_huft * *td,     // 生成的距离树。
+z_streamp )             // 用于内存分配
 {
   *bl = fixed_bl;
   *bd = fixed_bd;
@@ -1938,56 +1938,56 @@ z_streamp )             // for memory allocation
 }
 
 
-// inffast.c -- process literals and length/distance pairs fast
-// Copyright (C) 1995-1998 Mark Adler
-// For conditions of distribution and use, see copyright notice in zlib.h
+// inffast.c——快速处理字面值和长度/距离对
+// 版权所有 (C) 1995-1998 马克·阿德勒
+// 有关分发和使用条件，请参阅 zlib.h 中的版权声明
 //
 
 
-//struct inflate_codes_state {int dummy;}; // for buggy compilers 
+// struct inflate_codes_state {int dummy;}; // 对于有缺陷的编译器
 
 
-// macros for bit input with no checking and for returning unused bytes 
+// 用于不检查位输入和返回未使用字节的宏
 #define GRABBITS(j) {while(k<(j)){b|=((uLong)NEXTBYTE)<<k;k+=8;}}
 #define UNGRAB {c=z->avail_in-n;c=(k>>3)<c?k>>3:c;n+=c;p-=c;k-=c<<3;}
 
-// Called with number of bytes left to write in window at least 258
-// (the maximum string length) and number of input bytes available
-// at least ten.  The ten bytes are six bytes for the longest length/
-// distance pair plus four bytes for overloading the bit buffer. 
+// 调用快速处理时，输出窗口至少应有 258 字节（最大匹配长度）的
+// 空间，可用输入至少为 10 字节：最长长度/距离对需要 6 字节
+// ，另预留 4 字节供位缓冲区提前读取。
+//
 
 int inflate_fast(
 uInt bl, uInt bd,
 const inflate_huft *tl,
-const inflate_huft *td, // need separate declaration for Borland C++
+const inflate_huft *td, // Borland C++ 需要单独声明
 inflate_blocks_statef *s,
 z_streamp z)
 {
-  const inflate_huft *t;      // temporary pointer 
-  uInt e;               // extra bits or operation 
-  uLong b;              // bit buffer 
-  uInt k;               // bits in bit buffer 
-  Byte *p;             // input data pointer 
-  uInt n;               // bytes available there 
-  Byte *q;             // output window write pointer 
-  uInt m;               // bytes to end of window or read pointer 
-  uInt ml;              // mask for literal/length tree
-  uInt md;              // mask for distance tree 
-  uInt c;               // bytes to copy 
-  uInt d;               // distance back to copy from 
-  Byte *r;             // copy source pointer 
+  const inflate_huft *t;      // 临时指针
+  uInt e;               // 额外的位或操作
+  uLong b;              // 位缓冲器
+  uInt k;               // 位缓冲区中的位
+  Byte *p;             // 输入数据指针
+  uInt n;               // 那里可用的字节数
+  Byte *q;             // 输出窗口写指针
+  uInt m;               // 到窗口末尾或读指针的字节
+  uInt ml;              // 字面值/长度树的掩码
+  uInt md;              // 距离树的掩码
+  uInt c;               // 要复制的字节
+  uInt d;               // 复制距离
+  Byte *r;             // 复制源指针
 
-  // load input, output, bit values 
+  // 加载输入、输出、位值
   LOAD
 
-  // initialize masks 
+  // 初始化掩码
   ml = inflate_mask[bl];
   md = inflate_mask[bd];
 
-  // do until not enough input or output space for fast loop 
-  do {                          // assume called with m >= 258 && n >= 10 
-    // get literal/length code 
-    GRABBITS(20)                // max bits for literal/length code 
+  // 直到没有足够的输入或输出空间用于快速循环
+  do {                          // 假设调用 m >= 258 && n >= 10
+    // 获取字面值/长度代码
+    GRABBITS(20)                // 字面值/长度代码的最大位数
     if ((e = (t = tl + ((uInt)b & ml))->exop) == 0)
     {
       DUMPBITS(t->bits)
@@ -2002,38 +2002,38 @@ z_streamp z)
       DUMPBITS(t->bits)
       if (e & 16)
       {
-        // get extra bits for length 
+        // 读取长度附加位。
         e &= 15;
         c = t->base + ((uInt)b & inflate_mask[e]);
         DUMPBITS(e)
         LuTracevv((stderr, "inflate:         * length %u\n", c));
 
-        // decode distance base of block to copy 
-        GRABBITS(15);           // max bits for distance code 
+        // 解码待复制数据的距离基值。
+        GRABBITS(15);           // 距离代码的最大位数
         e = (t = td + ((uInt)b & md))->exop;
         for (;;) {
           DUMPBITS(t->bits)
           if (e & 16)
           {
-            // get extra bits to add to distance base 
+            // 读取距离附加位并与距离基值相加。
             e &= 15;
-            GRABBITS(e)         // get extra bits (up to 13) 
+            GRABBITS(e)         // 获得额外的位（最多 13 位）
             d = t->base + ((uInt)b & inflate_mask[e]);
             DUMPBITS(e)
             LuTracevv((stderr, "inflate:         * distance %u\n", d));
 
-            // do the copy
+            // 复制匹配数据。
             m -= c;
             r = q - d;
-            if (r < s->window)                  // wrap if needed
+            if (r < s->window)                  // 必要时回绕窗口。
             {
               do {
-                r += s->end - s->window;        // force pointer in window
-              } while (r < s->window);          // covers invalid distances
+                r += s->end - s->window;        // 将指针回绕到窗口范围内。
+              } while (r < s->window);          // 处理超出窗口范围的距离。
               e = (uInt) (s->end - r);
               if (c > e)
               {
-                c -= e;                         // wrapped copy
+                c -= e;                         // 跨窗口边界复制。
                 do {
                     *q++ = *r++;
                 } while (--e);
@@ -2042,7 +2042,7 @@ z_streamp z)
                     *q++ = *r++;
                 } while (--c);
               }
-              else                              // normal copy
+              else                              // 在窗口内直接复制。
               {
                 *q++ = *r++;  c--;
                 *q++ = *r++;  c--;
@@ -2051,7 +2051,7 @@ z_streamp z)
                 } while (--c);
               }
             }
-            else                                /* normal copy */
+            else                                /* 在窗口内直接复制。 */
             {
               *q++ = *r++;  c--;
               *q++ = *r++;  c--;
@@ -2107,7 +2107,7 @@ z_streamp z)
     };
   } while (m >= 258 && n >= 10);
 
-  // not enough input or output--restore pointers and return
+  // 输入或输出不足——恢复指针并返回
   UNGRAB
   UPDATE
   return Z_OK;
@@ -2118,18 +2118,18 @@ z_streamp z)
 
 
 
-// crc32.c -- compute the CRC-32 of a data stream
-// Copyright (C) 1995-1998 Mark Adler
-// For conditions of distribution and use, see copyright notice in zlib.h
+// crc32.c -- 计算数据流的 CRC-32
+// 版权所有 (C) 1995-1998 马克·阿德勒
+// 有关分发和使用条件，请参阅 zlib.h 中的版权声明
 
-// @(#) $Id$
-
-
+// 原始源码版本标记：@(#) $Id$。
 
 
 
 
-// Table of CRC-32's of all single-byte values (made by make_crc_table)
+
+
+// 所有单字节值的 CRC-32 表（由 make_crc_table 制作）
 const uLong crc_table[256] = {
   0x00000000L, 0x77073096L, 0xee0e612cL, 0x990951baL, 0x076dc419L,
   0x706af48fL, 0xe963a535L, 0x9e6495a3L, 0x0edb8832L, 0x79dcb8a4L,
@@ -2205,7 +2205,7 @@ uLong ucrc32(uLong crc, const Byte *buf, uInt len)
 
 
 // =============================================================
-// some decryption routines
+// 一些解密例程
 #define CRC32(c, b) (crc_table[((int)(c)^(b))&0xff]^((c)>>8))
 void Uupdate_keys(unsigned long *keys, char c)
 { keys[0] = CRC32(keys[0],c);
@@ -2225,16 +2225,16 @@ char zdecode(unsigned long *keys, char c)
 
 
 
-// adler32.c -- compute the Adler-32 checksum of a data stream
-// Copyright (C) 1995-1998 Mark Adler
-// For conditions of distribution and use, see copyright notice in zlib.h
+// adler32.c -- 计算数据流的 Adler-32 校验和
+// 版权所有 (C) 1995-1998 马克·阿德勒
+// 有关分发和使用条件，请参阅 zlib.h 中的版权声明
 
-// @(#) $Id$
+// 原始源码版本标记：@(#) $Id$。
 
 
-#define BASE 65521L // largest prime smaller than 65536
+#define BASE 65521L // 小于 65536 的最大素数
 #define NMAX 5552
-// NMAX is the largest n such that 255n(n+1)/2 + (n+1)(BASE-1) <= 2^32-1
+// NMAX 是满足 255n(n+1)/2 + (n+1)(BASE-1) <= 2^32-1 的最大 n
 
 #define AD_DO1(buf,i)  {s1 += buf[i]; s2 += s1;}
 #define AD_DO2(buf,i)  AD_DO1(buf,i); AD_DO1(buf,i+1);
@@ -2271,10 +2271,10 @@ uLong adler32(uLong adler, const Byte *buf, uInt len)
 
 
 
-// zutil.c -- target dependent utility functions for the compression library
-// Copyright (C) 1995-1998 Jean-loup Gailly.
-// For conditions of distribution and use, see copyright notice in zlib.h
-// @(#) $Id$
+// zutil.c——压缩库的目标相关实用函数
+// 版权所有 (C) 1995-1998 Jean-loup Gailly。
+// 有关分发和使用条件，请参阅 zlib.h 中的版权声明
+// 原始源码版本标记：@(#) $Id$。
 
 
 
@@ -2286,8 +2286,8 @@ const char * zlibVersion()
     return ZLIB_VERSION;
 }
 
-// exported to allow conversion of error code to string for compress() and
-// uncompress()
+// 导出错误码到字符串的转换函数，供 compress() 和
+// uncompress() 使用。
 const char * zError(int err)
 { return ERR_MSG(err);
 }
@@ -2297,62 +2297,62 @@ const char * zError(int err)
 
 voidpf zcalloc (voidpf opaque, unsigned items, unsigned size)
 {
-    if (opaque) items += size - size; // make compiler happy
+    if (opaque) items += size - size; // 避免编译器产生未使用参数警告。
     return (voidpf)calloc(items, size);
 }
 
 void  zcfree (voidpf opaque, voidpf ptr)
 {
     zfree(ptr);
-    if (opaque) return; // make compiler happy
+    if (opaque) return; // 避免编译器产生未使用参数警告。
 }
 
 
 
-// inflate.c -- zlib interface to inflate modules
-// Copyright (C) 1995-1998 Mark Adler
-// For conditions of distribution and use, see copyright notice in zlib.h
+// inflate.c——inflate 模块的 zlib 接口
+// 版权所有 (C) 1995-1998 马克·阿德勒
+// 有关分发和使用条件，请参阅 zlib.h 中的版权声明
 
-//struct inflate_blocks_state {int dummy;}; // for buggy compilers
+// struct inflate_blocks_state {int dummy;}; // 对于有缺陷的编译器
 
 typedef enum {
-      IM_METHOD,   // waiting for method byte
-      IM_FLAG,     // waiting for flag byte
-      IM_DICT4,    // four dictionary check bytes to go
-      IM_DICT3,    // three dictionary check bytes to go
-      IM_DICT2,    // two dictionary check bytes to go
-      IM_DICT1,    // one dictionary check byte to go
-      IM_DICT0,    // waiting for inflateSetDictionary
-      IM_BLOCKS,   // decompressing blocks
-      IM_CHECK4,   // four check bytes to go
-      IM_CHECK3,   // three check bytes to go
-      IM_CHECK2,   // two check bytes to go
-      IM_CHECK1,   // one check byte to go
-      IM_DONE,     // finished check, done
-      IM_BAD}      // got an error--stay here
+      IM_METHOD,   // 等待方法字节
+      IM_FLAG,     // 等待标志字节
+      IM_DICT4,    // 四个字典检查字节
+      IM_DICT3,    // 三个字典检查字节
+      IM_DICT2,    // 两个字典检查字节
+      IM_DICT1,    // 一个字典检查字节
+      IM_DICT0,    // 等待 inflateSetDictionary
+      IM_BLOCKS,   // 解压块
+      IM_CHECK4,   // 还剩四个检查字节
+      IM_CHECK3,   // 还剩三个检查字节
+      IM_CHECK2,   // 还需要两个检查字节
+      IM_CHECK1,   // 还剩一个检查字节
+      IM_DONE,     // 检查完毕，完成
+      IM_BAD}      // 出现错误--留在这里
 inflate_mode;
 
-// inflate private state
+// inflate 解压的私有状态。
 struct internal_state {
 
-  // mode
-  inflate_mode  mode;   // current inflate mode
+  // 模式
+  inflate_mode  mode;   // 当前 inflate 解压状态。
 
-  // mode dependent information
+  // 模式相关信息
   union {
-    uInt method;        // if IM_FLAGS, method byte
+    uInt method;        // 如果是 IM_FLAGS，则为方法字节
     struct {
-      uLong was;                // computed check value
-      uLong need;               // stream check value
-    } check;            // if CHECK, check values to compare
-    uInt marker;        // if IM_BAD, inflateSync's marker bytes count
-  } sub;        // submode
+      uLong was;                // 计算的检查值
+      uLong need;               // 流校验值
+    } check;            // 如果检查，检查要比较的值
+    uInt marker;        // 如果 IM_BAD，inflateSync 的标记字节数
+  } sub;        // 子模式
 
-  // mode independent information
-  int  nowrap;          // flag for no wrapper
-  uInt wbits;           // log2(window size)  (8..15, defaults to 15)
+  // 模式独立信息
+  int  nowrap;          // 没有包装器的标志
+  uInt wbits;           // log2（窗口大小）（8..15，默认为15）
   inflate_blocks_statef
-    *blocks;            // current inflate_blocks state
+    *blocks;            // 当前 inflate_blocks 状态
 
 };
 
@@ -2385,21 +2385,21 @@ int inflateInit2(z_streamp z)
 { const char *version = ZLIB_VERSION; int stream_size = sizeof(z_stream);
   if (version == Z_NULL || version[0] != ZLIB_VERSION[0] || stream_size != sizeof(z_stream)) return Z_VERSION_ERROR;
 
-  int w = -15; // MAX_WBITS: 32K LZ77 window.
-  // Warning: reducing MAX_WBITS makes minigzip unable to extract .gz files created by gzip.
-  // The memory requirements for deflate are (in bytes):
+  int w = -15; // MAX_WBITS：32K LZ77 窗口。
+  // 警告：减少 MAX_WBITS 会使 minigzip 无法提取 gzip 创建的 .gz 文件。
+  // deflate 的内存需求为（以字节为单位）：
   //            (1 << (windowBits+2)) +  (1 << (memLevel+9))
-  // that is: 128K for windowBits=15  +  128K for memLevel = 8  (default values)
-  // plus a few kilobytes for small objects. For example, if you want to reduce
-  // the default memory requirements from 256K to 128K, compile with
-  //     make CFLAGS="-O -DMAX_WBITS=14 -DMAX_MEM_LEVEL=7"
-  // Of course this will generally degrade compression (there's no free lunch).
+  // 即： windowBits=15 时为 128K + memLevel = 8 时为 128K（默认值）
+  // 小对象另需数 KB。若要把默认内存需求从 256K 降至 128
+  // K，可用 make CFLAGS="-O -DMAX_WBITS
+  // =14 -DMAX_MEM_LEVEL=7" 编译；代价是通常会
+  // 降低压缩率。
   //
-  //   The memory requirements for inflate are (in bytes) 1 << windowBits
-  // that is, 32K for windowBits=15 (default value) plus a few kilobytes
-  // for small objects.
+  // inflate 所需内存约为 1 << windowBits 字
+  // 节；默认 windowBits=15 时为 32K，此外小对象还
+  // 需数 KB。
 
-  // initialize state
+  // 初始化状态
   if (z == Z_NULL) return Z_STREAM_ERROR;
   z->msg = Z_NULL;
   if (z->zalloc == Z_NULL)
@@ -2413,7 +2413,7 @@ int inflateInit2(z_streamp z)
     return Z_MEM_ERROR;
   z->state->blocks = Z_NULL;
 
-  // handle undocumented nowrap option (no zlib header or check)
+  // 处理未记录的 nowrap 选项（无 zlib 标头或检查）
   z->state->nowrap = 0;
   if (w < 0)
   {
@@ -2421,7 +2421,7 @@ int inflateInit2(z_streamp z)
     z->state->nowrap = 1;
   }
 
-  // set window size
+  // 设置窗口大小
   if (w < 8 || w > 15)
   {
     inflateEnd(z);
@@ -2429,7 +2429,7 @@ int inflateInit2(z_streamp z)
   }
   z->state->wbits = (uInt)w;
 
-  // create inflate_blocks state
+  // 创建 inflate_blocks 状态
   if ((z->state->blocks =
       inflate_blocks_new(z, z->state->nowrap ? Z_NULL : adler32, (uInt)1 << w))
       == Z_NULL)
@@ -2439,7 +2439,7 @@ int inflateInit2(z_streamp z)
   }
   LuTracev((stderr, "inflate: allocated\n"));
 
-  // reset state 
+  // 重置状态
   inflateReset(z);
   return Z_OK;
 }
@@ -2466,14 +2466,14 @@ int inflate(z_streamp z, int f)
       {
         z->state->mode = IM_BAD;
         z->msg = (char*)"unknown compression method";
-        z->state->sub.marker = 5;       // can't try inflateSync
+        z->state->sub.marker = 5;       // 无法尝试 inflateSync
         break;
       }
       if ((z->state->sub.method >> 4) + 8 > z->state->wbits)
       {
         z->state->mode = IM_BAD;
         z->msg = (char*)"invalid window size";
-        z->state->sub.marker = 5;       // can't try inflateSync
+        z->state->sub.marker = 5;       // 无法尝试 inflateSync
         break;
       }
       z->state->mode = IM_FLAG;
@@ -2484,7 +2484,7 @@ int inflate(z_streamp z, int f)
       {
         z->state->mode = IM_BAD;
         z->msg = (char*)"incorrect header check";
-        z->state->sub.marker = 5;       // can't try inflateSync 
+        z->state->sub.marker = 5;       // 无法尝试 inflateSync
         break;
       }
       LuTracev((stderr, "inflate: zlib header ok\n"));
@@ -2515,14 +2515,14 @@ int inflate(z_streamp z, int f)
     case IM_DICT0:
       z->state->mode = IM_BAD;
       z->msg = (char*)"need dictionary";
-      z->state->sub.marker = 0;       // can try inflateSync 
+      z->state->sub.marker = 0;       // 可以尝试inflateSync
       return Z_STREAM_ERROR;
     case IM_BLOCKS:
       r = inflate_blocks(z->state->blocks, z, r);
       if (r == Z_DATA_ERROR)
       {
         z->state->mode = IM_BAD;
-        z->state->sub.marker = 0;       // can try inflateSync 
+        z->state->sub.marker = 0;       // 可以尝试inflateSync
         break;
       }
       if (r == Z_OK)
@@ -2557,7 +2557,7 @@ int inflate(z_streamp z, int f)
       {
         z->state->mode = IM_BAD;
         z->msg = (char*)"incorrect data check";
-        z->state->sub.marker = 5;       // can't try inflateSync 
+        z->state->sub.marker = 5;       // 无法尝试 inflateSync
         break;
       }
       LuTracev((stderr, "inflate: zlib check ok\n"));
@@ -2575,9 +2575,9 @@ int inflate(z_streamp z, int f)
 
 
 
-// unzip.c -- IO on .zip files using zlib
-// Version 0.15 beta, Mar 19th, 1998,
-// Read unzip.h for more info
+// unzip.c——使用 zlib 对 .zip 文件进行 IO
+// 版本 0.15 beta，1998 年 3 月 19 日，
+// 阅读 unzip.h 了解更多信息
 
 
 
@@ -2592,20 +2592,20 @@ int inflate(z_streamp z, int f)
 
 const char unz_copyright[] = " unzip 0.15 Copyright 1998 Gilles Vollant ";
 
-// unz_file_info_interntal contain internal info about a file in zipfile
+// unz_file_info_interntal 包含有关 zipfile 中文件的内部信息
 typedef struct unz_file_info_internal_s
 {
-    uLong offset_curfile;// relative offset of local header 4 bytes
+    uLong offset_curfile;// 本地头的相对偏移量 4 字节
 } unz_file_info_internal;
 
 
 typedef struct
-{ bool is_handle; // either a handle or memory
+{ bool is_handle; // 句柄或内存
   bool canseek;
-  // for handles:
+  // 对于句柄：
   HANDLE h; bool herr; unsigned long initial_offset; bool mustclosehandle;
-  // for memory:
-  void *buf; unsigned int len,pos; // if it's a memory block
+  // 用于内存输入。
+  void *buf; unsigned int len,pos; // 如果它是一个内存块
 } LUFILE;
 
 
@@ -2628,7 +2628,7 @@ LUFILE *lufopen(void *z,unsigned int len,DWORD flags,ZRESULT *err)
       if (h==INVALID_HANDLE_VALUE) {*err=ZR_NOFILE; return NULL;}
       mustclosehandle=true;
     }
-    // test if we can seek on it. We can't use GetFileType(h)==FILE_TYPE_DISK since it's not on CE.
+    // 检查句柄是否支持定位；Windows CE 没有相应接口，因此不使用 GetFileType(h)==FILE_TYPE_DISK 判断。
     DWORD res = SetFilePointer(h,0,0,FILE_CURRENT);
     canseek = (res!=0xFFFFFFFF);
   }
@@ -2674,10 +2674,10 @@ int lufseek(LUFILE *stream, long offset, int whence)
   { if (whence==SEEK_SET) SetFilePointer(stream->h,stream->initial_offset+offset,0,FILE_BEGIN);
     else if (whence==SEEK_CUR) SetFilePointer(stream->h,offset,NULL,FILE_CURRENT);
     else if (whence==SEEK_END) SetFilePointer(stream->h,offset,NULL,FILE_END);
-    else return 19; // EINVAL
+    else return 19; // EINVAL：参数无效。
     return 0;
   }
-  else if (stream->is_handle) return 29; // ESPIPE
+  else if (stream->is_handle) return 29; // ESPIPE：流不支持定位。
   else
   { if (whence==SEEK_SET) stream->pos=offset;
     else if (whence==SEEK_CUR) stream->pos+=offset;
@@ -2703,81 +2703,81 @@ size_t lufread(void *ptr,size_t size,size_t n,LUFILE *stream)
 
 
 
-// file_in_zip_read_info_s contain internal information about a file in zipfile,
-//  when reading and decompress it
+// file_in_zip_read_info_s 包含有关 zipfile 中文件的内部信息，
+// 读取并解压时
 typedef struct
 {
-	char  *read_buffer;         // internal buffer for compressed data
-	z_stream stream;            // zLib stream structure for inflate
+	char  *read_buffer;         // 压缩数据的内部缓冲区
+	z_stream stream;            // 用于 inflate 的 zLib 流结构
 
-	uLong pos_in_zipfile;       // position in byte on the zipfile, for fseek
-	uLong stream_initialised;   // flag set if stream structure is initialised
+	uLong pos_in_zipfile;       // zip 文件上的字节位置，用于 fseek
+	uLong stream_initialised;   // 如果流结构已初始化则设置标志
 
-	uLong offset_local_extrafield;// offset of the local extra field
-	uInt  size_local_extrafield;// size of the local extra field
-	uLong pos_local_extrafield;   // position in the local extra field in read
+	uLong offset_local_extrafield;// 本地额外字段的偏移量
+	uInt  size_local_extrafield;// 本地额外字段的大小
+	uLong pos_local_extrafield;   // read 中本地额外字段的位置
 
-	uLong crc32;                // crc32 of all data uncompressed
-	uLong crc32_wait;           // crc32 we must obtain after decompress all
-	uLong rest_read_compressed; // number of byte to be decompressed
-	uLong rest_read_uncompressed;//number of byte to be obtained after decomp
-	LUFILE* file;                 // io structore of the zipfile
-	uLong compression_method;   // compression method (0==store)
-	uLong byte_before_the_zipfile;// byte before the zipfile, (>0 for sfx)
-  bool encrypted;               // is it encrypted?
-  unsigned long keys[3];        // decryption keys, initialized by unzOpenCurrentFile
-  int encheadleft;              // the first call(s) to unzReadCurrentFile will read this many encryption-header bytes first
-  char crcenctest;              // if encrypted, we'll check the encryption buffer against this
+	uLong crc32;                // 所有未压缩数据的 crc32
+	uLong crc32_wait;           // 全部解压后必须得到crc32
+	uLong rest_read_compressed; // 要解压缩的字节数
+	uLong rest_read_uncompressed;// 解压后还需输出的字节数。
+	LUFILE* file;                 // zip 文件的 io 结构体
+	uLong compression_method;   // 压缩方法（0==存储）
+	uLong byte_before_the_zipfile;// zip 文件之前的字节，（对于 sfx，>0）
+  bool encrypted;               // 它是加密的吗？
+  unsigned long keys[3];        // 解密密钥，由 unzOpenCurrentFile 初始化
+  int encheadleft;              // 对 unzReadCurrentFile 的第一次调用将首先读取这么多加密头字节
+  char crcenctest;              // 如果加密，我们将根据此检查加密缓冲区
 } file_in_zip_read_info_s;
 
 
-// unz_s contain internal information about the zipfile
+// unz_s 包含有关 zip 文件的内部信息
 typedef struct
 {
-	LUFILE* file;               // io structore of the zipfile
-	unz_global_info gi;         // public global information
-	uLong byte_before_the_zipfile;// byte before the zipfile, (>0 for sfx)
-	uLong num_file;             // number of the current file in the zipfile
-	uLong pos_in_central_dir;   // pos of the current file in the central dir
-	uLong current_file_ok;      // flag about the usability of the current file
-	uLong central_pos;          // position of the beginning of the central dir
+	LUFILE* file;               // zip 文件的 io 结构体
+	unz_global_info gi;         // 公开的归档全局信息。
+	uLong byte_before_the_zipfile;// zip 文件之前的字节，（对于 sfx，>0）
+	uLong num_file;             // zip 文件中当前文件的编号
+	uLong pos_in_central_dir;   // 中央目录中当前文件的位置
+	uLong current_file_ok;      // 关于当前文件可用性的标志
+	uLong central_pos;          // 中央目录开始的位置
 
-	uLong size_central_dir;     // size of the central directory
-	uLong offset_central_dir;   // offset of start of central directory with respect to the starting disk number
+	uLong size_central_dir;     // 中央目录的大小
+	uLong offset_central_dir;   // 中央目录开头相对于起始磁盘号的偏移量
 
-	unz_file_info cur_file_info; // public info about the current file in zip
-	unz_file_info_internal cur_file_info_internal; // private info about it
-    file_in_zip_read_info_s* pfile_in_zip_read; // structure about the current file if we are decompressing it
+	unz_file_info cur_file_info; // 有关 zip 中当前文件的公共信息
+	unz_file_info_internal cur_file_info_internal; // 当前条目的内部信息。
+    file_in_zip_read_info_s* pfile_in_zip_read; // 如果我们正在解压缩当前文件的结构
 } unz_s, *unzFile;
 
 
 int unzStringFileNameCompare (const char* fileName1,const char* fileName2,int iCaseSensitivity);
-//   Compare two filename (fileName1,fileName2).
+// 比较两个文件名（文件名1，文件名2）。
 
 z_off_t unztell (unzFile file);
-//  Give the current position in uncompressed data
+// 给出未压缩数据中的当前位置
 
 int unzeof (unzFile file);
-//  return 1 if the end of file was reached, 0 elsewhere
+// 如果到达文件末尾则返回 1，其他位置返回 0
 
 int unzGetLocalExtrafield (unzFile file, voidp buf, unsigned len);
-//  Read extra field from the current file (opened by unzOpenCurrentFile)
-//  This is the local-header version of the extra field (sometimes, there is
-//    more info in the local-header version than in the central-header)
+// 从当前文件中读取额外字段（由 unzOpenCurrentFile 打开）
+// 读取本地文件头的附加字段；其内容有时比中央目录中的附加字段更丰富
+// 。
 //
-//  if buf==NULL, it return the size of the local extra field
+// 如果 buf==NULL，则返回本地额外字段的大小
 //
-//  if buf!=NULL, len is the size of the buffer, the extra header is copied in
-//	buf.
-//  the return value is the number of bytes copied in buf, or (if <0)
-//	the error code
+// 如果 buf!=NULL，len 是缓冲区的大小，则额外的标头将被复制到
+// 缓冲区。
+// 返回值是 buf 中复制的字节数，或者（如果 <0）
+// 错误代码
 
 
 
 // ===========================================================================
-//   Read a byte from a gz_stream; update next_in and avail_in. Return EOF
-// for end of file.
-// IN assertion: the stream s has been sucessfully opened for reading.
+// 从 gz_stream 读取一个字节，并更新 next_in 和
+// avail_in；输入结束时返回 EOF。
+// IN 断言：流 s 已成功打开以供读取。
 
 int unzlocal_getByte(LUFILE *fin,int *pi)
 { unsigned char c;
@@ -2794,7 +2794,7 @@ int unzlocal_getByte(LUFILE *fin,int *pi)
 
 
 // ===========================================================================
-// Reads a long in LSB order from the given gz_stream. Sets
+// 从给定的 gz_stream 按小端字节顺序读取一个 long。
 int unzlocal_getShort (LUFILE *fin,uLong *pX)
 {
     uLong x ;
@@ -2844,7 +2844,7 @@ int unzlocal_getLong (LUFILE *fin,uLong *pX)
 }
 
 
-// My own strcmpi / strcasecmp 
+// 自定义的忽略大小写比较函数，对应 strcmpi / strcasecmp。
 int strcmpcasenosensitive_internal (const char* fileName1,const char *fileName2)
 {
 	for (;;)
@@ -2870,9 +2870,9 @@ int strcmpcasenosensitive_internal (const char* fileName1,const char *fileName2)
 
 
 //
-// Compare two filename (fileName1,fileName2).
-// If iCaseSenisivity = 1, comparision is case sensitivity (like strcmp)
-// If iCaseSenisivity = 2, comparision is not case sensitivity (like strcmpi or strcasecmp)
+// 比较两个文件名（文件名1，文件名2）。
+// 如果 iCaseSenisivity = 1，则比较区分大小写（如 strcmp）
+// 如果 iCaseSenisivity = 2，则比较不区分大小写（如 strcmpi 或 strcasecmp）
 //
 int unzStringFileNameCompare (const char*fileName1,const char*fileName2,int iCaseSensitivity)
 { if (iCaseSensitivity==1) return strcmp(fileName1,fileName2);
@@ -2882,14 +2882,14 @@ int unzStringFileNameCompare (const char*fileName1,const char*fileName2,int iCas
 #define BUFREADCOMMENT (0x400)
 
 
-//  Locate the Central directory of a zipfile (at the end, just before
-// the global comment). Lu bugfix 2005.07.26 - returns 0xFFFFFFFF if not found,
-// rather than 0, since 0 is a valid central-dir-location for an empty zipfile.
+// 定位 ZIP 尾部、全局注释之前的中央目录。Lucian 于 2005
+// -07-26 修正：未找到时返回 0xFFFFFFFF；0 是空归档的
+// 有效中央目录位置，不能表示失败。
 uLong unzlocal_SearchCentralDir(LUFILE *fin)
 { if (lufseek(fin,0,SEEK_END) != 0) return 0xFFFFFFFF;
   uLong uSizeFile = luftell(fin);
 
-  uLong uMaxBack=0xffff; // maximum size of global comment
+  uLong uMaxBack=0xffff; // 全局归档注释的最大大小
   if (uMaxBack>uSizeFile) uMaxBack = uSizeFile;
 
   unsigned char *buf = (unsigned char*)zmalloc(BUFREADCOMMENT+4);
@@ -2921,9 +2921,9 @@ uLong unzlocal_SearchCentralDir(LUFILE *fin)
 int unzGoToFirstFile (unzFile file);
 int unzCloseCurrentFile (unzFile file);
 
-// Open a Zip file.
-// If the zipfile cannot be opened (file don't exist or in not valid), return NULL.
-// Otherwise, the return value is a unzFile Handle, usable with other unzip functions
+// 打开 Zip 文件。
+// 如果无法打开 zip 文件（文件不存在或无效），则返回 NULL。
+// 否则，返回值是 unzFile 句柄，可与其他解压缩函数一起使用
 unzFile unzOpenInternal(LUFILE *fin)
 { if (fin==NULL) return NULL;
   if (unz_copyright[0]!=' ') {lufclose(fin); return NULL;}
@@ -2934,25 +2934,25 @@ unzFile unzOpenInternal(LUFILE *fin)
   central_pos = unzlocal_SearchCentralDir(fin);
   if (central_pos==0xFFFFFFFF) err=UNZ_ERRNO;
   if (lufseek(fin,central_pos,SEEK_SET)!=0) err=UNZ_ERRNO;
-  // the signature, already checked
+  // 签名，已经检查过
   if (unzlocal_getLong(fin,&uL)!=UNZ_OK) err=UNZ_ERRNO;
-  // number of this disk
-  uLong number_disk;          // number of the current dist, used for spanning ZIP, unsupported, always 0
+  // 该磁盘的编号
+  uLong number_disk;          // 当前磁盘号；用于分卷 ZIP，当前不支持，因此总为 0。
   if (unzlocal_getShort(fin,&number_disk)!=UNZ_OK) err=UNZ_ERRNO;
-  // number of the disk with the start of the central directory
-  uLong number_disk_with_CD;  // number the the disk with central dir, used for spaning ZIP, unsupported, always 0
+  // 中央目录起始位置所在的磁盘编号。
+  uLong number_disk_with_CD;  // 中央目录所在磁盘号；用于分卷 ZIP，当前不支持，因此总为 0。
   if (unzlocal_getShort(fin,&number_disk_with_CD)!=UNZ_OK) err=UNZ_ERRNO;
-  // total number of entries in the central dir on this disk
+  // 该磁盘上中央目录中的条目总数
   if (unzlocal_getShort(fin,&us.gi.number_entry)!=UNZ_OK) err=UNZ_ERRNO;
-  // total number of entries in the central dir
-  uLong number_entry_CD;      // total number of entries in the central dir (same than number_entry on nospan)
+  // 中央目录中的条目总数
+  uLong number_entry_CD;      // 中央目录条目总数；非分卷归档中与 number_entry 相同。
   if (unzlocal_getShort(fin,&number_entry_CD)!=UNZ_OK) err=UNZ_ERRNO;
   if ((number_entry_CD!=us.gi.number_entry) || (number_disk_with_CD!=0) || (number_disk!=0)) err=UNZ_BADZIPFILE;
-  // size of the central directory
+  // 中央目录的大小
   if (unzlocal_getLong(fin,&us.size_central_dir)!=UNZ_OK) err=UNZ_ERRNO;
-  // offset of start of central directory with respect to the starting disk number
+  // 中央目录开头相对于起始磁盘号的偏移量
   if (unzlocal_getLong(fin,&us.offset_central_dir)!=UNZ_OK) err=UNZ_ERRNO;
-  // zipfile comment length
+  // zip文件注释长度
   if (unzlocal_getShort(fin,&us.gi.size_comment)!=UNZ_OK) err=UNZ_ERRNO;
   if ((central_pos+fin->initial_offset<us.offset_central_dir+us.size_central_dir) && (err==UNZ_OK)) err=UNZ_BADZIPFILE;
   if (err!=UNZ_OK) {lufclose(fin);return NULL;}
@@ -2961,7 +2961,7 @@ unzFile unzOpenInternal(LUFILE *fin)
   us.byte_before_the_zipfile = central_pos+fin->initial_offset - (us.offset_central_dir+us.size_central_dir);
   us.central_pos = central_pos;
   us.pfile_in_zip_read = NULL;
-  fin->initial_offset = 0; // since the zipfile itself is expected to handle this
+  fin->initial_offset = 0; // 因为 zip 文件本身应该能够处理这个问题
 
   unz_s *s = (unz_s*)zmalloc(sizeof(unz_s));
   *s=us;
@@ -2971,10 +2971,10 @@ unzFile unzOpenInternal(LUFILE *fin)
 
 
 
-//  Close a ZipFile opened with unzipOpen.
-//  If there is files inside the .Zip opened with unzipOpenCurrentFile (see later),
-//    these files MUST be closed with unzipCloseCurrentFile before call unzipClose.
-//  return UNZ_OK if there is no problem.
+// 关闭用 unzipOpen 打开的 ZipFile。
+// 如果 .Zip 中有使用 unzipOpenCurrentFile 打开的文件（见下文），
+// 在调用 unzipClose 之前，必须使用 unzipCloseCurrentFile 关闭这些文件。
+// 如果没有问题则返回UNZ_OK。
 int unzClose (unzFile file)
 {
 	unz_s* s;
@@ -2986,14 +2986,14 @@ int unzClose (unzFile file)
         unzCloseCurrentFile(file);
 
 	lufclose(s->file);
-	if (s) zfree(s); // unused s=0;
+	if (s) zfree(s); // 未使用的原语句：s=0;
 	return UNZ_OK;
 }
 
 
-//  Write info about the ZipFile in the *pglobal_info structure.
-//  No preparation of the structure is needed
-//  return UNZ_OK if there is no problem. 
+// 在 *pglobal_info 结构中写入有关 ZipFile 的信息。
+// 无需准备结构
+// 如果没有问题则返回UNZ_OK。
 int unzGetGlobalInfo (unzFile file,unz_global_info *pglobal_info)
 {
 	unz_s* s;
@@ -3005,7 +3005,7 @@ int unzGetGlobalInfo (unzFile file,unz_global_info *pglobal_info)
 }
 
 
-//   Translate date/time from Dos format to tm_unz (readable more easilty)
+// 将日期/时间从 Dos 格式转换为 tm_unz（更容易阅读）
 void unzlocal_DosDateToTmuDate (uLong ulDosDate, tm_unz* ptm)
 {
     uLong uDate;
@@ -3019,7 +3019,7 @@ void unzlocal_DosDateToTmuDate (uLong ulDosDate, tm_unz* ptm)
     ptm->tm_sec =  (uInt) (2*(ulDosDate&0x1f)) ;
 }
 
-//  Get Info about the current file in the zipfile, with internal only info
+// 获取有关 zip 文件中当前文件的信息，仅包含内部信息
 int unzlocal_GetCurrentFileInfoInternal (unzFile file,
                                                   unz_file_info *pfile_info,
                                                   unz_file_info_internal
@@ -3050,7 +3050,7 @@ int unzlocal_GetCurrentFileInfoInternal (unzFile file, unz_file_info *pfile_info
 		err=UNZ_ERRNO;
 
 
-	// we check the magic
+	// 检查文件头的魔数签名。
 	if (err==UNZ_OK)
 		if (unzlocal_getLong(s->file,&uMagic) != UNZ_OK)
 			err=UNZ_ERRNO;
@@ -3158,15 +3158,15 @@ int unzlocal_GetCurrentFileInfoInternal (unzFile file, unz_file_info *pfile_info
 
 		if (lSeek!=0)
 			if (lufseek(s->file,lSeek,SEEK_CUR)==0)
-				{} // unused lSeek=0;
+				{} // 未使用的原语句：lSeek=0;
 			else
 				err=UNZ_ERRNO;
 		if ((file_info.size_file_comment>0) && (commentBufferSize>0))
 			if (lufread(szComment,(uInt)uSizeRead,1,s->file)!=1)
 				err=UNZ_ERRNO;
-		//unused lSeek+=file_info.size_file_comment - uSizeRead;
+		// 未使用的原语句：lSeek+=file_info.size_file_comment - uSizeRead;
 	}
-	else {} //unused lSeek+=file_info.size_file_comment;
+	else {} // 未使用的原语句：lSeek+=file_info.size_file_comment;
 
 	if ((err==UNZ_OK) && (pfile_info!=NULL))
 		*pfile_info=file_info;
@@ -3179,9 +3179,9 @@ int unzlocal_GetCurrentFileInfoInternal (unzFile file, unz_file_info *pfile_info
 
 
 
-//  Write info about the ZipFile in the *pglobal_info structure.
-//  No preparation of the structure is needed
-//  return UNZ_OK if there is no problem.
+// 在 *pglobal_info 结构中写入有关 ZipFile 的信息。
+// 无需准备结构
+// 如果没有问题则返回UNZ_OK。
 int unzGetCurrentFileInfo (unzFile file, unz_file_info *pfile_info,
   char *szFileName, uLong fileNameBufferSize, void *extraField, uLong extraFieldBufferSize,
   char *szComment, uLong commentBufferSize)
@@ -3190,8 +3190,8 @@ int unzGetCurrentFileInfo (unzFile file, unz_file_info *pfile_info,
 }
 
 
-//  Set the current file of the zipfile to the first file.
-//  return UNZ_OK if there is no problem
+// 将 zip 文件的当前文件设置为第一个文件。
+// 没有问题则返回UNZ_OK
 int unzGoToFirstFile (unzFile file)
 {
 	int err;
@@ -3208,9 +3208,9 @@ int unzGoToFirstFile (unzFile file)
 }
 
 
-//  Set the current file of the zipfile to the next file.
-//  return UNZ_OK if there is no problem
-//  return UNZ_END_OF_LIST_OF_FILE if the actual file was the latest.
+// 将 zip 文件的当前文件设置为下一个文件。
+// 没有问题则返回UNZ_OK
+// 如果当前文件已经是最后一项，则返回 UNZ_END_OF_LIST_OF_FILE。
 int unzGoToNextFile (unzFile file)
 {
 	unz_s* s;
@@ -3235,11 +3235,11 @@ int unzGoToNextFile (unzFile file)
 }
 
 
-//  Try locate the file szFileName in the zipfile.
-//  For the iCaseSensitivity signification, see unzStringFileNameCompare
-//  return value :
-//  UNZ_OK if the file is found. It becomes the current file.
-//  UNZ_END_OF_LIST_OF_FILE if the file is not found
+// 尝试在 zip 文件中找到文件 szFileName。
+// 有关 iCaseSensitivity 含义，请参阅 unzStringFileNameCompare
+// 返回值：
+// 如果找到文件，则 UNZ_OK。它成为当前文件。
+// UNZ_END_OF_LIST_OF_FILE（如果未找到文件）
 int unzLocateFile (unzFile file, const char *szFileName, int iCaseSensitivity)
 {
 	unz_s* s;
@@ -3282,11 +3282,11 @@ int unzLocateFile (unzFile file, const char *szFileName, int iCaseSensitivity)
 }
 
 
-//  Read the local header of the current zipfile
-//  Check the coherency of the local header and info in the end of central
-//        directory about this file
-//  store in *piSizeVar the size of extra info in local header
-//        (filename and size of extra field data)
+// 读取当前zip文件的本地头
+// 核对本地文件头与中央目录中当前条目信息是否一致；通过 *
+// piSizeVar 返回本地文件头可变部分的大小，即文件名和附加
+// 字段的总长度。
+//
 int unzlocal_CheckCurrentFileCoherencyHeader (unz_s *s,uInt *piSizeVar,
   uLong *poffset_local_extrafield, uInt  *psize_local_extrafield)
 {
@@ -3325,22 +3325,22 @@ int unzlocal_CheckCurrentFileCoherencyHeader (unz_s *s,uInt *piSizeVar,
                          (s->cur_file_info.compression_method!=Z_DEFLATED))
         err=UNZ_BADZIPFILE;
 
-	if (unzlocal_getLong(s->file,&uData) != UNZ_OK) // date/time
+	if (unzlocal_getLong(s->file,&uData) != UNZ_OK) // 日期/时间
 		err=UNZ_ERRNO;
 
-	if (unzlocal_getLong(s->file,&uData) != UNZ_OK) // crc
+	if (unzlocal_getLong(s->file,&uData) != UNZ_OK) // 循环冗余校验（CRC）
 		err=UNZ_ERRNO;
 	else if ((err==UNZ_OK) && (uData!=s->cur_file_info.crc) &&
 		                      ((uFlags & 8)==0))
 		err=UNZ_BADZIPFILE;
 
-	if (unzlocal_getLong(s->file,&uData) != UNZ_OK) // size compr
+	if (unzlocal_getLong(s->file,&uData) != UNZ_OK) // 压缩后大小。
 		err=UNZ_ERRNO;
 	else if ((err==UNZ_OK) && (uData!=s->cur_file_info.compressed_size) &&
 							  ((uFlags & 8)==0))
 		err=UNZ_BADZIPFILE;
 
-	if (unzlocal_getLong(s->file,&uData) != UNZ_OK) // size uncompr
+	if (unzlocal_getLong(s->file,&uData) != UNZ_OK) // 未压缩大小。
 		err=UNZ_ERRNO;
 	else if ((err==UNZ_OK) && (uData!=s->cur_file_info.uncompressed_size) &&
 							  ((uFlags & 8)==0))
@@ -3369,8 +3369,8 @@ int unzlocal_CheckCurrentFileCoherencyHeader (unz_s *s,uInt *piSizeVar,
 
 
 
-//  Open for reading data the current file in the zipfile.
-//  If there is no error and the file is opened, the return value is UNZ_OK.
+// 打开 zip 文件中的当前文件以读取数据。
+// 如果没有错误并且文件被打开，则返回值为UNZ_OK。
 int unzOpenCurrentFile (unzFile file, const char *password)
 {
 	int err;
@@ -3378,8 +3378,8 @@ int unzOpenCurrentFile (unzFile file, const char *password)
 	uInt iSizeVar;
 	unz_s* s;
 	file_in_zip_read_info_s* pfile_in_zip_read_info;
-	uLong offset_local_extrafield;  // offset of the local extra field
-	uInt  size_local_extrafield;    // size of the local extra field
+	uLong offset_local_extrafield;  // 本地额外字段的偏移量
+	uInt  size_local_extrafield;    // 本地额外字段的大小
 
 	if (file==NULL)
 		return UNZ_PARAMERROR;
@@ -3405,14 +3405,14 @@ int unzOpenCurrentFile (unzFile file, const char *password)
 
 	if (pfile_in_zip_read_info->read_buffer==NULL)
 	{
-		if (pfile_in_zip_read_info!=0) zfree(pfile_in_zip_read_info); //unused pfile_in_zip_read_info=0;
+		if (pfile_in_zip_read_info!=0) zfree(pfile_in_zip_read_info); // 未使用的原语句：pfile_in_zip_read_info=0;
 		return UNZ_INTERNALERROR;
 	}
 
 	pfile_in_zip_read_info->stream_initialised=0;
 
 	if ((s->cur_file_info.compression_method!=0) && (s->cur_file_info.compression_method!=Z_DEFLATED))
-        { // unused err=UNZ_BADZIPFILE;
+        { // 未使用的原语句：err=UNZ_BADZIPFILE;
         }
 	Store = s->cur_file_info.compression_method==0;
 
@@ -3433,12 +3433,12 @@ int unzOpenCurrentFile (unzFile file, const char *password)
           err=inflateInit2(&pfile_in_zip_read_info->stream);
 	  if (err == Z_OK)
 	    pfile_in_zip_read_info->stream_initialised=1;
-        // windowBits is passed < 0 to tell that there is no zlib header.
-        // Note that in this case inflate *requires* an extra "dummy" byte
-        // after the compressed stream in order to complete decompression and
-        // return Z_STREAM_END.
-        // In unzip, i don't wait absolutely Z_STREAM_END because I known the
-        // size of both compressed and uncompressed data
+        // 传递 windowBits < 0 表示没有 zlib 标头。
+        // 此模式下 inflate 通常需要在压缩流之后再有一个占位字节，
+        // 才能完成解压并返回 Z_STREAM_END。本 ZIP 实现已
+        // 知压缩和未压缩大小，因此不会只依赖 Z_STREAM_END 判
+        // 断结束。
+        //
 	}
 	pfile_in_zip_read_info->rest_read_compressed = s->cur_file_info.compressed_size ;
 	pfile_in_zip_read_info->rest_read_uncompressed = s->cur_file_info.uncompressed_size ;
@@ -3464,13 +3464,13 @@ int unzOpenCurrentFile (unzFile file, const char *password)
 }
 
 
-//  Read bytes from the current file.
-//  buf contain buffer where data must be copied
-//  len the size of buf.
-//  return the number of byte copied if somes bytes are copied (and also sets *reached_eof)
-//  return 0 if the end of file was reached. (and also sets *reached_eof).
-//  return <0 with error code if there is an error. (in which case *reached_eof is meaningless)
-//    (UNZ_ERRNO for IO error, or zLib error for uncompress error)
+// 从当前文件中读取字节。
+// buf 包含必须复制数据的缓冲区
+// len 是 buf 的大小。
+// 成功复制部分数据时返回已复制字节数，并设置 *reached_eof。
+// 到达文件末尾时返回 0，并设置 *reached_eof。
+// 发生错误时返回负错误码；此时 *reached_eof 不具有有效含义。
+// （UNZ_ERRNO 表示 IO 错误，或 zLib 错误表示解压缩错误）
 int unzReadCurrentFile  (unzFile file, voidp buf, unsigned len, bool *reached_eof)
 { int err=UNZ_OK;
   uInt iRead = 0;
@@ -3569,7 +3569,7 @@ int unzReadCurrentFile  (unzFile file, voidp buf, unsigned len, bool *reached_eo
 }
 
 
-//  Give the current position in uncompressed data
+// 给出未压缩数据中的当前位置
 z_off_t unztell (unzFile file)
 {
 	unz_s* s;
@@ -3586,7 +3586,7 @@ z_off_t unztell (unzFile file)
 }
 
 
-//  return 1 if the end of file was reached, 0 elsewhere
+// 如果到达文件末尾则返回 1，其他位置返回 0
 int unzeof (unzFile file)
 {
 	unz_s* s;
@@ -3607,12 +3607,12 @@ int unzeof (unzFile file)
 
 
 
-//  Read extra field from the current file (opened by unzOpenCurrentFile)
-//  This is the local-header version of the extra field (sometimes, there is
-//    more info in the local-header version than in the central-header)
-//  if buf==NULL, it return the size of the local extra field that can be read
-//  if buf!=NULL, len is the size of the buffer, the extra header is copied in buf.
-//  the return value is the number of bytes copied in buf, or (if <0) the error code
+// 从当前文件中读取额外字段（由 unzOpenCurrentFile 打开）
+// 这里读取本地文件头的附加字段；其中可能比中央目录的附加字段包含更
+// 多信息。
+// 如果buf==NULL，则返回可读取的本地额外字段的大小
+// 如果 buf!=NULL，len 是缓冲区的大小，则额外的标头将复制到 buf 中。
+// 返回值是 buf 中复制的字节数，或者（如果 <0）错误代码
 int unzGetLocalExtrafield (unzFile file,voidp buf,unsigned len)
 {
 	unz_s* s;
@@ -3651,8 +3651,8 @@ int unzGetLocalExtrafield (unzFile file,voidp buf,unsigned len)
 	return (int)read_now;
 }
 
-//  Close the file in zip opened with unzipOpenCurrentFile
-//  Return UNZ_CRCERROR if all the file was read but the CRC is not good
+// 关闭使用 unzipOpenCurrentFile 打开的 zip 文件
+// 若已读完当前条目但 CRC 不匹配，则返回 UNZ_CRCERROR。
 int unzCloseCurrentFile (unzFile file)
 {
 	int err=UNZ_OK;
@@ -3685,7 +3685,7 @@ int unzCloseCurrentFile (unzFile file)
 		inflateEnd(&pfile_in_zip_read_info->stream);
 
 	pfile_in_zip_read_info->stream_initialised = 0;
-        if (pfile_in_zip_read_info!=0) zfree(pfile_in_zip_read_info); // unused pfile_in_zip_read_info=0;
+        if (pfile_in_zip_read_info!=0) zfree(pfile_in_zip_read_info); // 未使用的原语句：pfile_in_zip_read_info=0;
 
     s->pfile_in_zip_read=NULL;
 
@@ -3693,9 +3693,9 @@ int unzCloseCurrentFile (unzFile file)
 }
 
 
-//  Get the global comment string of the ZipFile, in the szComment buffer.
-//  uSizeBuf is the size of the szComment buffer.
-//  return the number of byte copied or an error code <0
+// 获取 szComment 缓冲区中 ZipFile 的全局注释字符串。
+// uSizeBuf 是 szComment 缓冲区的大小。
+// 返回复制的字节数或错误代码<0
 int unzGetGlobalComment (unzFile file, char *szComment, uLong uSizeBuf)
 { //int err=UNZ_OK;
   unz_s* s;
@@ -3722,7 +3722,7 @@ int unzReadCurrentFile (unzFile file, void *buf, unsigned len);
 int unzCloseCurrentFile (unzFile file);
 
 
-typedef unsigned __int32 lutime_t;       // define it ourselves since we don't include time.h
+typedef unsigned __int32 lutime_t;       // 自己定义它，因为我们不包括 time.h
 
 FILETIME timet2filetime(const lutime_t t)
 { LONGLONG i = Int32x32To64(t,10000000) + 116444736000000000;
@@ -3733,8 +3733,8 @@ FILETIME timet2filetime(const lutime_t t)
 }
 
 FILETIME dosdatetime2filetime(WORD dosdate,WORD dostime)
-{ // date: bits 0-4 are day of month 1-31. Bits 5-8 are month 1..12. Bits 9-15 are year-1980
-  // time: bits 0-4 are seconds/2, bits 5-10 are minute 0..59. Bits 11-15 are hour 0..23
+{ // 日期位域：0..4 为日，5..8 为月，9..15 为年份减去 1980。
+  // 时间位域：0..4 为秒数除以 2，5..10 为分钟，11..15 为小时。
   SYSTEMTIME st;
   st.wYear = (WORD)(((dosdate>>9)&0x7f) + 1980);
   st.wMonth = (WORD)((dosdate>>5)&0xf);
@@ -3756,8 +3756,8 @@ class TUnzip
 
   unzFile uf; int currentfile; ZIPENTRY cze; int czei;
   char *password;
-  char *unzbuf;            // lazily created and destroyed, used by Unzip
-  TCHAR rootdir[MAX_PATH]; // includes a trailing slash
+  char *unzbuf;            // 延迟创建和销毁，由 Unzip 使用
+  TCHAR rootdir[MAX_PATH]; // 包括尾部斜杠
 
   ZRESULT Open(void *z,unsigned int len,DWORD flags);
   ZRESULT Get(int index,ZIPENTRY *ze);
@@ -3780,7 +3780,7 @@ ZRESULT TUnzip::Open(void *z,unsigned int len,DWORD flags)
   if (lastchar!='\\' && lastchar!='/') _tcscat(rootdir,_T("\\"));
   //
   if (flags==ZIP_HANDLE)
-  { // test if we can seek on it. We can't use GetFileType(h)==FILE_TYPE_DISK since it's not on CE.
+  { // 检查句柄是否支持定位；Windows CE 没有相应接口，因此不使用 GetFileType(h)==FILE_TYPE_DISK 判断。
     DWORD res = SetFilePointer(z,0,0,FILE_CURRENT);
     bool canseek = (res!=0xFFFFFFFF);
     if (!canseek) return ZR_SEEK;
@@ -3818,8 +3818,8 @@ ZRESULT TUnzip::Get(int index,ZIPENTRY *ze)
   while ((int)uf->num_file<index) unzGoToNextFile(uf);
   unz_file_info ufi; char fn[MAX_PATH];
   unzGetCurrentFileInfo(uf,&ufi,fn,MAX_PATH,NULL,0,NULL,0);
-  // now get the extra header. We do this ourselves, instead of
-  // calling unzOpenCurrentFile &c., to avoid allocating more than necessary.
+  // 现在获取额外的标头。我们自己做这件事，而不是
+  // 调用 unzOpenCurrentFile &c.，以避免分配不必要的资源。
   unsigned int extralen,iSizeVar; unsigned long offset;
   int res = unzlocal_CheckCurrentFileCoherencyHeader(uf,&iSizeVar,&offset,&extralen);
   if (res!=UNZ_OK) return ZR_CORRUPT;
@@ -3834,12 +3834,12 @@ ZRESULT TUnzip::Get(int index,ZIPENTRY *ze)
 #else
   strcpy(tfn,fn);
 #endif
-  // As a safety feature: if the zip filename had sneaky stuff
-  // like "c:\windows\file.txt" or "\windows\file.txt" or "fred\..\..\..\windows\file.txt"
-  // then we get rid of them all. That way, when the programmer does UnzipItem(hz,i,ze.name),
-  // it won't be a problem. (If the programmer really did want to get the full evil information,
-  // then they can edit out this security feature from here).
-  // In particular, we chop off any prefixes that are "c:\" or "\" or "/" or "[stuff]\.." or "[stuff]/.."
+  // 原有安全处理：如果 ZIP 条目名包含可疑的路径片段，
+  // 例如 c:\windows\file.txt、\windows\file.txt 或 fred\..\..\..\windows\file.txt，
+  // 则先移除这些片段，供 UnzipItem(hz,i,ze.name) 使用。
+  // 原作者注明：若调用方确实需要完整的原始路径信息，
+  // 可自行调整此安全处理；此处仅翻译说明，保留原实现。
+  // 具体会截掉 c:\、\、/、[目录]\..、[目录]/.. 等前缀。
   const TCHAR *sfn=tfn;
   for (;;)
   { if (sfn[0]!=0 && sfn[1]==':') {sfn+=2; continue;}
@@ -3855,16 +3855,16 @@ ZRESULT TUnzip::Get(int index,ZIPENTRY *ze)
   _tcscpy(ze->name, sfn);
 
 
-  // zip has an 'attribute' 32bit value. Its lower half is windows stuff
-  // its upper half is standard unix stat.st_mode. We'll start trying
-  // to read it in unix mode
+  // ZIP 属性为 32 位数值，低 16 位表示 Windows/DOS 属性，
+  // 高 16 位表示标准 Unix stat.st_mode 属性；先尝试
+  // 按 Unix 属性解释。
   unsigned long a = ufi.external_fa;
   bool isdir  =   (a&0x40000000)!=0;
   bool readonly=  (a&0x00800000)==0;
-  //bool readable=  (a&0x01000000)!=0; // unused
-  //bool executable=(a&0x00400000)!=0; // unused
+  // bool readable=  (a&0x01000000)!=0; // 未使用，保留原语句。
+  // bool executable=(a&0x00400000)!=0; // 未使用，保留原语句。
   bool hidden=false, system=false, archive=true;
-  // but in normal hostmodes these are overridden by the lower half...
+  // 但对常见的来源系统类型，将使用低 16 位属性覆盖上述判断。
   int host = ufi.version>>8;
   if (host==0 || host==7 || host==11 || host==14)
   { readonly=  (a&0x00000001)!=0;
@@ -3887,8 +3887,8 @@ ZRESULT TUnzip::Get(int index,ZIPENTRY *ze)
   FILETIME ftd = dosdatetime2filetime(dosdate,dostime);
   FILETIME ft; LocalFileTimeToFileTime(&ftd,&ft);
   ze->atime=ft; ze->ctime=ft; ze->mtime=ft;
-  // the zip will always have at least that dostime. But if it also has
-  // an extra header, then we'll instead get the info from that.
+  // ZIP 条目至少包含 DOS 时间；如果还存在扩展时间字段，
+  // 则优先使用其中的时间信息。
   unsigned int epos=0;
   while (epos+4<extralen)
   { char etype[3]; etype[0]=extra[epos+0]; etype[1]=extra[epos+1]; etype[2]=0;
@@ -3981,32 +3981,32 @@ ZRESULT TUnzip::Unzip(int index,void *dst,unsigned int len,DWORD flags)
     if (res==UNZ_PASSWORD) return ZR_PASSWORD;
     return ZR_FLATE;
   }
-  // otherwise we're writing to a handle or a file
+  // 否则我们将写入句柄或文件
   if (currentfile!=-1) unzCloseCurrentFile(uf); currentfile=-1;
   if (index>=(int)uf->gi.number_entry) return ZR_ARGS;
   if (index<(int)uf->num_file) unzGoToFirstFile(uf);
   while ((int)uf->num_file<index) unzGoToNextFile(uf);
   ZIPENTRY ze; Get(index,&ze);
-  // zipentry=directory is handled specially
+  // 目录条目采用专门处理。
   if ((ze.attr&FILE_ATTRIBUTE_DIRECTORY)!=0)
-  { if (flags==ZIP_HANDLE) return ZR_OK; // don't do anything
+  { if (flags==ZIP_HANDLE) return ZR_OK; // 向句柄或内存解压目录时，不执行数据写入。
     const TCHAR *dir = (const TCHAR*)dst;
     bool isabsolute = (dir[0]=='/' || dir[0]=='\\' || (dir[0]!=0 && dir[1]==':'));
     if (isabsolute) EnsureDirectory(0,dir); else EnsureDirectory(rootdir,dir);
     return ZR_OK;
   }
-  // otherwise, we write the zipentry to a file/handle
+  // 普通文件条目则写入文件或句柄。
   HANDLE h;
   if (flags==ZIP_HANDLE) h=dst;
   else
   { const TCHAR *ufn = (const TCHAR*)dst;
-    // We'll qualify all relative names to our root dir, and leave absolute names as they are
+    // 相对路径拼接到解压基目录；绝对路径按原样使用。
     // ufn="zipfile.txt"  dir=""  name="zipfile.txt"  fn="c:\\currentdir\\zipfile.txt"
     // ufn="dir1/dir2/subfile.txt"  dir="dir1/dir2/"  name="subfile.txt"  fn="c:\\currentdir\\dir1/dir2/subfiles.txt"
     // ufn="\z\file.txt"  dir="\z\"  name="file.txt"  fn="\z\file.txt"
-    // This might be a security risk, in the case where we just use the zipentry's name as "ufn", where
-    // a malicious zip could unzip itself into c:\windows. Our solution is that GetZipItem (which
-    // is how the user retrieve's the file's name within the zip) never returns absolute paths.
+    // 若直接使用 ZIP 条目名作为 ufn，可能存在路径安全风险：
+    // 恶意归档可能写入 c:\windows。因此，通过 GetZipItem
+    // 获取条目名称时，原有处理不会返回绝对路径。
     const TCHAR *name=ufn; const TCHAR *c=name; while (*c!=0) {if (*c=='/' || *c=='\\') name=c+1; c++;}
     TCHAR dir[MAX_PATH]; _tcscpy(dir,ufn); if (name==ufn) *dir=0; else dir[name-ufn]=0;
     TCHAR fn[MAX_PATH]; 
@@ -4019,7 +4019,7 @@ ZRESULT TUnzip::Unzip(int index,void *dst,unsigned int len,DWORD flags)
   if (h==INVALID_HANDLE_VALUE) return ZR_NOFILE;
   unzOpenCurrentFile(uf,password);
   if (unzbuf==0) unzbuf=new char[16384]; DWORD haderr=0;
-  //  
+  //
 
   for (; haderr==0;)
   { bool reached_eof;
@@ -4030,7 +4030,7 @@ ZRESULT TUnzip::Unzip(int index,void *dst,unsigned int len,DWORD flags)
     if (reached_eof) break;
     if (res==0) {haderr=ZR_FLATE; break;}
   }
-  if (!haderr) SetFileTime(h,&ze.ctime,&ze.atime,&ze.mtime); // may fail if it was a pipe
+  if (!haderr) SetFileTime(h,&ze.ctime,&ze.atime,&ze.mtime); // 如果是管道可能会失败
   if (flags!=ZIP_HANDLE) CloseHandle(h);
   unzCloseCurrentFile(uf);
   if (haderr!=0) return haderr;

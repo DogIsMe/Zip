@@ -1,28 +1,28 @@
-#include <windows.h>
+﻿#include <windows.h>
 #include <stdio.h>
 #include <tchar.h>
 #include "zip.h"
 
 
-// THIS FILE is almost entirely based upon code by info-zip.
-// It has been modified by Lucian Wischik. The modifications
-// were a complete rewrite of the bit of code that generates the
-// layout of the zipfile, and support for zipping to/from memory
-// or handles or pipes or pagefile or diskfiles, encryption, unicode.
-// The original code may be found at http://www.info-zip.org
-// The original copyright text follows.
-//
+// 本文件主要基于 Info-ZIP 源码，由 Lucian Wischik 修改并重新封装。
+// 原封装重写了 ZIP 文件布局的生成部分，
+// 并扩展了压缩输入、输出的存储方式，
+// 支持内存、句柄、管道、分页文件和磁盘文件，
+// 同时增加加密与 Unicode 支持。
+// 原始源码：http://www.info-zip.org。
+// 以下保留原始版权和许可原文；本轮仅调整注释与 UTF-8 BOM 编码。
+// 中文说明：以下为 1999 年 10 月 5 日版 Info-ZIP 版权与许可，原文予以保留。
 //
 //
 // This is version 1999-Oct-05 of the Info-ZIP copyright and license.
 // The definitive version of this document should be available at
 // ftp://ftp.cdrom.com/pub/infozip/license.html indefinitely.
-//
+// 版权所有：1990—1999 Info-ZIP，保留所有权利。
 // Copyright (c) 1990-1999 Info-ZIP.  All rights reserved.
-//
+// 许可中的 Info-ZIP 指下列原作者及贡献者，姓名保持原文。
 // For the purposes of this copyright and license, "Info-ZIP" is defined as
 // the following set of individuals:
-//
+// 作者名单：
 //   Mark Adler, John Bush, Karl Davis, Harald Denker, Jean-Michel Dubois,
 //   Jean-loup Gailly, Hunter Goatley, Ian Gorman, Chris Herborth, Dirk Haase,
 //   Greg Hartwig, Robert Heath, Jonathan Hudson, Paul Kienitz, David Kirschbaum,
@@ -30,19 +30,19 @@
 //   Sergio Monesi, Keith Owens, George Petrov, Greg Roelofs, Kai Uwe Rommel,
 //   Steve Salisbury, Dave Smith, Christian Spieler, Antoine Verheijen,
 //   Paul von Behren, Rich Wales, Mike White
-//
+// 免责声明译文：本软件按现状提供，无任何明示或默示保证；作者及贡献者不对使用或无法使用本软件产生的任何损害承担责任。
 // This software is provided "as is," without warranty of any kind, express
 // or implied.  In no event shall Info-ZIP or its contributors be held liable
 // for any direct, indirect, incidental, special or consequential damages
 // arising out of the use of or inability to use this software.
-//
+// 授权译文：允许任何人出于包括商业用途在内的任何目的使用、修改和自由再分发本软件，但须遵守以下条件。
 // Permission is granted to anyone to use this software for any purpose,
 // including commercial applications, and to alter it and redistribute it
 // freely, subject to the following restrictions:
-//
+// 条件 1、2 译文：源码分发须保留版权、定义、免责声明和条款；二进制分发须在随附文档或其他材料中重现这些内容。
 //    1. Redistributions of source code must retain the above copyright notice,
 //       definition, disclaimer, and this list of conditions.
-//
+// 条件 3 译文：修改版本须明确标注，禁止冒充原始源码或 Info-ZIP 官方发布；未经许可不得使用条款列出的名称，也不得误用其邮件地址或网址。
 //    2. Redistributions in binary form must reproduce the above copyright
 //       notice, definition, disclaimer, and this list of conditions in
 //       documentation and/or other materials provided with the distribution.
@@ -58,90 +58,90 @@
 //       or "MacZip" without the explicit permission of Info-ZIP.  Such altered
 //       versions are further prohibited from misrepresentative use of the
 //       Zip-Bugs or Info-ZIP e-mail addresses or of the Info-ZIP URL(s).
-//
+// 条件 4 译文：Info-ZIP 保留在其源码和二进制发行中使用所列名称的权利。
 //    4. Info-ZIP retains the right to use the names "Info-ZIP," "Zip," "UnZip,"
 //       "WiZ," "Pocket UnZip," "Pocket Zip," and "MacZip" for its own source and
 //       binary releases.
 //
 
 
-typedef unsigned char uch;      // unsigned 8-bit value
-typedef unsigned short ush;     // unsigned 16-bit value
-typedef unsigned long ulg;      // unsigned 32-bit value
-typedef size_t extent;          // file size
-typedef unsigned Pos;   // must be at least 32 bits
-typedef unsigned IPos; // A Pos is an index in the character window. Pos is used only for parameter passing
+typedef unsigned char uch;      // 无符号 8 位值
+typedef unsigned short ush;     // 无符号 16 位值
+typedef unsigned long ulg;      // 无符号 32 位值
+typedef size_t extent;          // 文件大小
+typedef unsigned Pos;   // 必须至少为 32 位
+typedef unsigned IPos; // Pos 为字符窗口中的索引类型；IPos 用于参数传递。
 
 #ifndef EOF
 #define EOF (-1)
 #endif
 
 
-// Error return values.  The values 0..4 and 12..18 follow the conventions
-// of PKZIP.   The values 4..10 are all assigned to "insufficient memory"
-// by PKZIP, so the codes 5..10 are used here for other purposes.
-#define ZE_MISS         -1      // used by procname(), zipbare()
-#define ZE_OK           0       // success
-#define ZE_EOF          2       // unexpected end of zip file
-#define ZE_FORM         3       // zip file structure error
-#define ZE_MEM          4       // out of memory
-#define ZE_LOGIC        5       // internal logic error
-#define ZE_BIG          6       // entry too large to split
-#define ZE_NOTE         7       // invalid comment format
-#define ZE_TEST         8       // zip test (-T) failed or out of memory
-#define ZE_ABORT        9       // user interrupt or termination
-#define ZE_TEMP         10      // error using a temp file
-#define ZE_READ         11      // read or seek error
-#define ZE_NONE         12      // nothing to do
-#define ZE_NAME         13      // missing or empty zip file
-#define ZE_WRITE        14      // error writing to a file
-#define ZE_CREAT        15      // couldn't open to write
-#define ZE_PARMS        16      // bad command line
-#define ZE_OPEN         18      // could not open a specified file to read
-#define ZE_MAXERR       18      // the highest error number
+// 错误返回值：0..4 和 12..18 沿用 PKZIP 的约定。
+// PKZIP 将 4..10 均用于表示内存不足，
+// 本实现保留 4 的含义，将 5..10 用于其他错误。
+#define ZE_MISS         -1      // 由 procname()、zipbare() 使用
+#define ZE_OK           0       // 成功
+#define ZE_EOF          2       // zip 文件意外结束
+#define ZE_FORM         3       // zip 文件结构错误
+#define ZE_MEM          4       // 内存不足
+#define ZE_LOGIC        5       // 内部逻辑错误
+#define ZE_BIG          6       // 条目太大而无法拆分
+#define ZE_NOTE         7       // 归档注释格式无效。
+#define ZE_TEST         8       // zip 测试 (-T) 失败或内存不足
+#define ZE_ABORT        9       // 用户中断或终止
+#define ZE_TEMP         10      // 使用临时文件时出错
+#define ZE_READ         11      // 读取文件或移动文件位置时出错。
+#define ZE_NONE         12      // 无事可做
+#define ZE_NAME         13      // zip 文件丢失或为空
+#define ZE_WRITE        14      // 写入文件时出错
+#define ZE_CREAT        15      // 无法打开写入
+#define ZE_PARMS        16      // 错误的命令行
+#define ZE_OPEN         18      // 无法打开指定文件进行读取
+#define ZE_MAXERR       18      // 最大错误编号。
 
 
-// internal file attribute
+// 内部文件属性
 #define UNKNOWN (-1)
 #define BINARY  0
 #define ASCII   1
 
-#define BEST -1                 // Use best method (deflation or store)
-#define STORE 0                 // Store method
-#define DEFLATE 8               // Deflation method
+#define BEST -1                 // 选择最佳方式：DEFLATE 压缩或直接存储。
+#define STORE 0                 // 直接存储，不进行压缩。
+#define DEFLATE 8               // DEFLATE 压缩。
 
 #define CRCVAL_INITIAL  0L
 
-// MSDOS file or directory attributes
+// MSDOS 文件或目录属性
 #define MSDOS_HIDDEN_ATTR 0x02
 #define MSDOS_DIR_ATTR 0x10
 
-// Lengths of headers after signatures in bytes
+// 签名后的标头长度（以字节为单位）
 #define LOCHEAD 26
 #define CENHEAD 42
 #define ENDHEAD 18
 
-// Definitions for extra field handling:
-#define EB_HEADSIZE       4     /* length of a extra field block header */
-#define EB_LEN            2     /* offset of data length field in header */
-#define EB_UT_MINLEN      1     /* minimal UT field contains Flags byte */
-#define EB_UT_FLAGS       0     /* byte offset of Flags field */
-#define EB_UT_TIME1       1     /* byte offset of 1st time value */
-#define EB_UT_FL_MTIME    (1 << 0)      /* mtime present */
-#define EB_UT_FL_ATIME    (1 << 1)      /* atime present */
-#define EB_UT_FL_CTIME    (1 << 2)      /* ctime present */
+// 额外字段处理的定义：
+#define EB_HEADSIZE       4     /* 额外字段块头的长度 */
+#define EB_LEN            2     /* 标头中数据长度字段的偏移量 */
+#define EB_UT_MINLEN      1     /* 最小 UT 字段包含标志字节 */
+#define EB_UT_FLAGS       0     /* Flags 字段的字节偏移量 */
+#define EB_UT_TIME1       1     /* 第一个时间值的字节偏移量 */
+#define EB_UT_FL_MTIME    (1 << 0)      /* 包含修改时间 mtime。 */
+#define EB_UT_FL_ATIME    (1 << 1)      /* 包含访问时间 atime。 */
+#define EB_UT_FL_CTIME    (1 << 2)      /* 包含创建时间 ctime。 */
 #define EB_UT_LEN(n)      (EB_UT_MINLEN + 4 * (n))
 #define EB_L_UT_SIZE    (EB_HEADSIZE + EB_UT_LEN(3))
 #define EB_C_UT_SIZE    (EB_HEADSIZE + EB_UT_LEN(1))
 
 
-// Macros for writing machine integers to little-endian format
+// 用于将机器整数写入小端格式的宏
 #define PUTSH(a,f) {char _putsh_c=(char)((a)&0xff); wfunc(param,&_putsh_c,1); _putsh_c=(char)((a)>>8); wfunc(param,&_putsh_c,1);}
 #define PUTLG(a,f) {PUTSH((a) & 0xffff,(f)) PUTSH((a) >> 16,(f))}
 
 
-// -- Structure of a ZIP file --
-// Signatures for zip file information headers
+// -- ZIP 文件的结构 --
+// zip 文件信息标头的签名
 #define LOCSIG     0x04034b50L
 #define CENSIG     0x02014b50L
 #define ENDSIG     0x06054b50L
@@ -150,23 +150,23 @@ typedef unsigned IPos; // A Pos is an index in the character window. Pos is used
 
 #define MIN_MATCH  3
 #define MAX_MATCH  258
-// The minimum and maximum match lengths
+// 最小和最大匹配长度
 
 
 #define WSIZE  (0x8000)
-// Maximum window size = 32K. If you are really short of memory, compile
-// with a smaller WSIZE but this reduces the compression ratio for files
-// of size > WSIZE. WSIZE must be a power of two in the current implementation.
+// 最大窗口大小 = 32K。如果你实在内存不足，编译
+// 使用较小的 WSIZE 但这会降低文件的压缩率
+// 大小 > WSIZE。在当前实现中，WSIZE 必须是 2 的幂。
 //
 
 #define MIN_LOOKAHEAD (MAX_MATCH+MIN_MATCH+1)
-// Minimum amount of lookahead, except at the end of the input file.
-// See deflate.c for comments about the MIN_MATCH+1.
+// 最少的前瞻量（输入文件末尾除外）。
+// 有关 MIN_MATCH+1 的注释，请参阅 deflate.c。
 //
 
 #define MAX_DIST  (WSIZE-MIN_LOOKAHEAD)
-// In order to simplify the code, particularly on 16 bit machines, match
-// distances are limited to MAX_DIST instead of WSIZE.
+// 为了简化代码，特别是在 16 位机器上，匹配
+// 距离限制为 MAX_DIST 而不是 WSIZE。
 //
 
 
@@ -178,84 +178,84 @@ typedef unsigned IPos; // A Pos is an index in the character window. Pos is used
 
 
 // ===========================================================================
-// Constants
+// 常量定义。
 //
 
 #define MAX_BITS 15
-// All codes must not exceed MAX_BITS bits
+// 所有编码的位数均不能超过 MAX_BITS。
 
 #define MAX_BL_BITS 7
-// Bit length codes must not exceed MAX_BL_BITS bits
+// 码长编码的位数不能超过 MAX_BL_BITS。
 
 #define LENGTH_CODES 29
-// number of length codes, not counting the special END_BLOCK code
+// 长度编码数量，不含 END_BLOCK。
 
 #define LITERALS  256
-// number of literal bytes 0..255
+// 字面值字节数量，对应 0..255。
 
 #define END_BLOCK 256
-// end of block literal code
+// 数据块结束标记的字面值编码。
 
 #define L_CODES (LITERALS+1+LENGTH_CODES)
-// number of Literal or Length codes, including the END_BLOCK code
+// 字面值和长度编码总数，包含 END_BLOCK。
 
 #define D_CODES   30
-// number of distance codes
+// 距离编码数量。
 
 #define BL_CODES  19
-// number of codes used to transfer the bit lengths
+// 用于传送码长的编码数量。
 
 
 #define STORED_BLOCK 0
 #define STATIC_TREES 1
 #define DYN_TREES    2
-// The three kinds of block type
+// 三种块类型
 
 #define LIT_BUFSIZE  0x8000
 #define DIST_BUFSIZE  LIT_BUFSIZE
-// Sizes of match buffers for literals/lengths and distances.  There are
-// 4 reasons for limiting LIT_BUFSIZE to 64K:
-//   - frequencies can be kept in 16 bit counters
-//   - if compression is not successful for the first block, all input data is
-//     still in the window so we can still emit a stored block even when input
-//     comes from standard input.  (This can also be done for all blocks if
-//     LIT_BUFSIZE is not greater than 32K.)
-//   - if compression is not successful for a file smaller than 64K, we can
-//     even emit a stored file instead of a stored block (saving 5 bytes).
-//   - creating new Huffman trees less frequently may not provide fast
-//     adaptation to changes in the input data statistics. (Take for
-//     example a binary file with poorly compressible code followed by
-//     a highly compressible string table.) Smaller buffer sizes give
-//     fast adaptation but have of course the overhead of transmitting trees
-//     more frequently.
-//   - I can't count above 4
-// The current code is general and allows DIST_BUFSIZE < LIT_BUFSIZE (to save
-// memory at the expense of compression). Some optimizations would be possible
-// if we rely on DIST_BUFSIZE == LIT_BUFSIZE.
+// 字面值/长度和距离的匹配缓冲区的大小。  有
+// 将 LIT_BUFSIZE 限制为 64K 的 4 个原因：
+// - 出现次数可以保存在16位计数器中
+// - 如果第一个块的压缩不成功，则所有输入数据都将被压缩
+// 仍在窗口中，因此即使输入时我们仍然可以发出存储的块
+// 来自标准输入。  （这也可以对所有块进行，如果
+// LIT_BUFSIZE 不大于 32K。）
+// - 如果小于 64K 的文件压缩不成功，我们可以
+// 甚至发出存储的文件而不是存储的块（节省 5 个字节）。
+// - 不太频繁地创建新的哈夫曼树可能无法提供快速
+// 适应输入数据统计的变化。 （取为
+// 示例一个二进制文件，其代码可压缩性较差，后跟
+// 高度可压缩的字符串表。）较小的缓冲区大小给出
+// 快速适应，但当然有传输树的开销
+// 更频繁。
+// 原作者注：以上理由实际超过了四条。
+// 当前代码是通用的，允许 DIST_BUFSIZE < LIT_BUFSIZE （以保存
+// 以压缩为代价的内存）。一些优化是可能的
+// 如果我们依赖 DIST_BUFSIZE == LIT_BUFSIZE。
 //
 
 #define REP_3_6      16
-// repeat previous bit length 3-6 times (2 bits of repeat count)
+// 重复前一个位长度 3-6 次（2 位重复计数）
 
 #define REPZ_3_10    17
-// repeat a zero length 3-10 times  (3 bits of repeat count)
+// 重复零长度 3-10 次（3 位重复计数）
 
 #define REPZ_11_138  18
-// repeat a zero length 11-138 times  (7 bits of repeat count)
+// 重复零长度 11-138 次（7 位重复计数）
 
 #define HEAP_SIZE (2*L_CODES+1)
-// maximum heap size
+// 最大堆大小
 
 
 // ===========================================================================
-// Local data used by the "bit string" routines.
+// “位串”例程使用的本地数据。
 //
 
 #define Buf_size (8 * 2*sizeof(char))
-// Number of bits used within bi_buf. (bi_buf may be implemented on
-// more than 16 bits on some systems.)
+// bi_buf 中使用的位数。 （bi_buf 可以在
+// 在某些系统上超过 16 位。）
 
-// Output a 16 bit value to the bit stream, lower (oldest) byte first
+// 将 16 位值输出到比特流，低（最旧）字节在前
 #define PUTSHORT(state,w) \
 { if (state.bs.out_offset >= state.bs.out_size-1) \
     state.flush_outbuf(state.param,state.bs.out_buf, &state.bs.out_offset); \
@@ -269,117 +269,117 @@ typedef unsigned IPos; // A Pos is an index in the character window. Pos is used
   state.bs.out_buf[state.bs.out_offset++] = (char) (b); \
 }
 
-// DEFLATE.CPP HEADER
+// DEFLATE.CPP 的头部定义。
 
 #define HASH_BITS  15
-// For portability to 16 bit machines, do not use values above 15.
+// 为了可移植到 16 位计算机，请勿使用高于 15 的值。
 
 #define HASH_SIZE (unsigned)(1<<HASH_BITS)
 #define HASH_MASK (HASH_SIZE-1)
 #define WMASK     (WSIZE-1)
-// HASH_SIZE and WSIZE must be powers of two
+// HASH_SIZE 和 WSIZE 必须是 2 的幂
 
 #define NIL 0
-// Tail of hash chains
+// 哈希链的尾部
 
 #define FAST 4
 #define SLOW 2
-// speed options for the general purpose bit flag
+// 通用位标志的速度选项
 
 #define TOO_FAR 4096
-// Matches of length 3 are discarded if their distance exceeds TOO_FAR
+// 如果距离超过 TOO_FAR，长度为 3 的匹配将被丢弃
 
 
 
 #define EQUAL 0
-// result of memcmp for equal strings
+// 相等字符串的 memcmp 结果
 
 
 // ===========================================================================
-// Local data used by the "longest match" routines.
+// “最长匹配”例程使用的本地数据。
 
 #define H_SHIFT  ((HASH_BITS+MIN_MATCH-1)/MIN_MATCH)
-// Number of bits by which ins_h and del_h must be shifted at each
-// input step. It must be such that after MIN_MATCH steps, the oldest
-// byte no longer takes part in the hash key, that is:
+// ins_h 和 del_h 必须每次移位的位数
+// 输入步骤。必须是这样，在 MIN_MATCH 步骤之后，最旧的
+// byte不再参与哈希键，即：
 //   H_SHIFT * MIN_MATCH >= HASH_BITS
 
 #define max_insert_length  max_lazy_match
-// Insert new strings in the hash table only if the match length
-// is not greater than this length. This saves time but degrades compression.
-// max_insert_length is used only for compression levels <= 3.
+// 仅当长度匹配时才在哈希表中插入新字符串
+// 不大于这个长度。这可以节省时间，但会降低压缩率。
+// max_insert_length 仅用于压缩级别 <= 3。
 
 
 
-const int extra_lbits[LENGTH_CODES] // extra bits for each length code
+const int extra_lbits[LENGTH_CODES] // 每个长度编码的附加位数。
    = {0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0};
 
-const int extra_dbits[D_CODES] // extra bits for each distance code
+const int extra_dbits[D_CODES] // 每个距离编码的附加位数。
    = {0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13};
 
-const int extra_blbits[BL_CODES]// extra bits for each bit length code
+const int extra_blbits[BL_CODES]// 每个码长编码的附加位数。
    = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,3,7};
 
 const uch bl_order[BL_CODES] = {16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15};
-// The lengths of the bit length codes are sent in order of decreasing
-// probability, to avoid transmitting the lengths for unused bit length codes.
+// 位长代码的长度按递减顺序发送
+// 概率，以避免传输未使用的位长度代码的长度。
 
 
 typedef struct config {
-   ush good_length; // reduce lazy search above this match length
-   ush max_lazy;    // do not perform lazy search above this match length
-   ush nice_length; // quit search above this match length
+   ush good_length; // 减少超过此匹配长度的惰性搜索
+   ush max_lazy;    // 不要执行超过此匹配长度的惰性搜索
+   ush nice_length; // 退出超过此匹配长度的搜索
    ush max_chain;
 } config;
 
-// Values for max_lazy_match, good_match, nice_match and max_chain_length,
-// depending on the desired pack level (0..9). The values given below have
-// been tuned to exclude worst case performance for pathological files.
-// Better values may be found for specific files.
+// max_lazy_match、good_match、nice_match 和 max_chain_length 的值，
+// 取决于所需的包级别 (0..9)。下面给出的值有
+// 经过调整以排除病理文件的最坏情况性能。
+// 对于特定文件可能会找到更好的值。
 //
 
 const config configuration_table[10] = {
-//  good lazy nice chain
-    {0,    0,  0,    0},  // 0 store only
-    {4,    4,  8,    4},  // 1 maximum speed, no lazy matches
+// 各列依次为 good、lazy、nice、chain 配置。
+    {0,    0,  0,    0},  // 等级 0：仅存储。
+    {4,    4,  8,    4},  // 等级 1：优先速度，不进行惰性匹配。
     {4,    5, 16,    8},  // 2
     {4,    6, 32,   32},  // 3
-    {4,    4, 16,   16},  // 4 lazy matches */
+    {4,    4, 16,   16},  // 等级 4：使用惰性匹配。
     {8,   16, 32,   32},  // 5
     {8,   16, 128, 128},  // 6
     {8,   32, 128, 256},  // 7
     {32, 128, 258, 1024}, // 8
-    {32, 258, 258, 4096}};// 9 maximum compression */
+    {32, 258, 258, 4096}};// 等级 9：优先压缩率。
 
-// Note: the deflate() code requires max_lazy >= MIN_MATCH and max_chain >= 4
-// For deflate_fast() (levels <= 3) good is ignored and lazy has a different meaning.
-
-
+// 注意：deflate() 代码要求 max_lazy >= MIN_MATCH 且 max_chain >= 4
+// 对于 deflate_fast() （级别 <= 3），good 会被忽略，lazy 有不同的含义。
 
 
 
 
 
-// Data structure describing a single value and its code string.
+
+
+// 描述单个值及其代码字符串的数据结构。
 typedef struct ct_data {
     union {
-        ush  freq;       // frequency count
-        ush  code;       // bit string
+        ush  freq;       // 出现次数。
+        ush  code;       // 位串。
     } fc;
     union {
-        ush  dad;        // father node in Huffman tree
-        ush  len;        // length of bit string
+        ush  dad;        // 哈夫曼树的父节点
+        ush  len;        // 编码位数。
     } dl;
 } ct_data;
 
 typedef struct tree_desc {
-    ct_data *dyn_tree;      // the dynamic tree
-    ct_data *static_tree;   // corresponding static tree or NULL
-    const int *extra_bits;  // extra bits for each code or NULL
-    int     extra_base;     // base index for extra_bits
-    int     elems;          // max number of elements in the tree
-    int     max_length;     // max bit length for the codes
-    int     max_code;       // largest code with non zero frequency
+    ct_data *dyn_tree;      // 动态树。
+    ct_data *static_tree;   // 对应静态树；不存在时为 NULL。
+    const int *extra_bits;  // 各编码附加位数表；不存在时为 NULL。
+    int     extra_base;     // extra_bits 的基本索引
+    int     elems;          // 树中的最大元素数
+    int     max_length;     // 代码的最大位长度
+    int     max_code;       // 出现次数非零的最大编码编号。
 } tree_desc;
 
 
@@ -389,72 +389,72 @@ class TTreeState
 { public:
   TTreeState();
 
-  ct_data dyn_ltree[HEAP_SIZE];    // literal and length tree
-  ct_data dyn_dtree[2*D_CODES+1];  // distance tree
-  ct_data static_ltree[L_CODES+2]; // the static literal tree...
-  // ... Since the bit lengths are imposed, there is no need for the L_CODES
-  // extra codes used during heap construction. However the codes 286 and 287
-  // are needed to build a canonical tree (see ct_init below).
-  ct_data static_dtree[D_CODES]; // the static distance tree...
-  // ... (Actually a trivial tree since all codes use 5 bits.)
-  ct_data bl_tree[2*BL_CODES+1];  // Huffman tree for the bit lengths
+  ct_data dyn_ltree[HEAP_SIZE];    // 字面值和长度树
+  ct_data dyn_dtree[2*D_CODES+1];  // 距离树
+  ct_data static_ltree[L_CODES+2]; // 静态字面值树...
+  // ...由于位长度是强加的，因此不需要 L_CODES
+  // 堆构建期间使用的额外代码。然而代码 286 和 287
+  // 需要构建规范树（请参阅下面的 ct_init）。
+  ct_data static_dtree[D_CODES]; // 静态距离树...
+  // ...（实际上是一个简单的树，因为所有代码都使用 5 位。）
+  ct_data bl_tree[2*BL_CODES+1];  // 位长度的哈夫曼树
 
   tree_desc l_desc;
   tree_desc d_desc;
   tree_desc bl_desc;
 
-  ush bl_count[MAX_BITS+1];  // number of codes at each bit length for an optimal tree
+  ush bl_count[MAX_BITS+1];  // 最优树的每个位长度的代码数
 
-  int heap[2*L_CODES+1]; // heap used to build the Huffman trees
-  int heap_len;               // number of elements in the heap
-  int heap_max;               // element of largest frequency
-  // The sons of heap[n] are heap[2*n] and heap[2*n+1]. heap[0] is not used.
-  // The same heap array is used to build all trees.
+  int heap[2*L_CODES+1]; // 用于构建哈夫曼树的堆
+  int heap_len;               // 堆中元素的数量
+  int heap_max;               // 出现次数最高的元素所在位置。
+  // heap[n] 的子节点是 heap[2*n] 和 heap[2*n+1]。未使用堆[0]。
+  // 使用相同的堆数组来构建所有树。
 
   uch depth[2*L_CODES+1];
-  // Depth of each subtree used as tie breaker for trees of equal frequency
+  // 各子树深度；出现次数相同时以深度决定先后。
 
   uch length_code[MAX_MATCH-MIN_MATCH+1];
-  // length code for each normalized match length (0 == MIN_MATCH)
+  // 每个归一化匹配长度的长度编码，0 对应 MIN_MATCH。
 
   uch dist_code[512];
-  // distance codes. The first 256 values correspond to the distances
-  // 3 .. 258, the last 256 values correspond to the top 8 bits of
-  // the 15 bit distances.
+  // 距离代码。前 256 个值对应于距离
+  // 3 .. 258，最后256个值对应于高8位
+  // 15 位距离。
 
   int base_length[LENGTH_CODES];
-  // First normalized length for each code (0 = MIN_MATCH)
+  // 每个代码的第一个标准化长度 (0 = MIN_MATCH)
 
   int base_dist[D_CODES];
-  // First normalized distance for each code (0 = distance of 1)
+  // 每个代码的第一个归一化距离（0 = 1 的距离）
 
-  uch far l_buf[LIT_BUFSIZE];  // buffer for literals/lengths
-  ush far d_buf[DIST_BUFSIZE]; // buffer for distances
+  uch far l_buf[LIT_BUFSIZE];  // 字面值/长度缓冲区
+  ush far d_buf[DIST_BUFSIZE]; // 距离缓冲区
 
   uch flag_buf[(LIT_BUFSIZE/8)];
-  // flag_buf is a bit array distinguishing literals from lengths in
-  // l_buf, and thus indicating the presence or absence of a distance.
+  // flag_buf 是一个位数组，用于区分字面值和长度
+  // l_buf，从而指示距离的存在或不存在。
 
-  unsigned last_lit;    // running index in l_buf
-  unsigned last_dist;   // running index in d_buf
-  unsigned last_flags;  // running index in flag_buf
-  uch flags;            // current flags not yet saved in flag_buf
-  uch flag_bit;         // current bit used in flags
-  // bits are filled in flags starting at bit 0 (least significant).
-  // Note: these flags are overkill in the current code since we don't
-  // take advantage of DIST_BUFSIZE == LIT_BUFSIZE.
+  unsigned last_lit;    // l_buf 中的运行索引
+  unsigned last_dist;   // d_buf 中的运行索引
+  unsigned last_flags;  // flag_buf 中的运行索引
+  uch flags;            // 当前标志尚未保存在 flag_buf 中
+  uch flag_bit;         // 标志中使用的当前位
+  // 位从位 0（最低有效位）开始填充到标志中。
+  // 注意：这些标志在当前代码中是多余的，因为我们不这样做
+  // 利用 DIST_BUFSIZE == LIT_BUFSIZE。
 
-  ulg opt_len;          // bit length of current block with optimal trees
-  ulg static_len;       // bit length of current block with static trees
+  ulg opt_len;          // 具有最佳树的当前块的位长度
+  ulg static_len;       // 具有静态树的当前块的位长度
 
-  ulg cmpr_bytelen;     // total byte length of compressed file
-  ulg cmpr_len_bits;    // number of bits past 'cmpr_bytelen'
+  ulg cmpr_bytelen;     // 压缩文件的总字节长度
+  ulg cmpr_len_bits;    // “cmpr_bytelen”之后的位数
 
-  ulg input_len;        // total byte length of input file
-  // input_len is for debugging only since we can get it by other means.
+  ulg input_len;        // 输入文件的总字节长度
+  // input_len 仅用于调试，因为我们可以通过其他方式获取它。
 
-  ush *file_type;       // pointer to UNKNOWN, BINARY or ASCII
-//  int *file_method;     // pointer to DEFLATE or STORE
+  ush *file_type;       // 指向 UNKNOWN、BINARY 或 ASCII 文件类型标记的指针。
+//   int *file_method;     // 指向 DEFLATE 或 STORE 压缩方式的指针。
 };
 
 TTreeState::TTreeState()
@@ -474,19 +474,19 @@ class TBitState
   int flush_flg;
   //
   unsigned bi_buf;
-  // Output buffer. bits are inserted starting at the bottom (least significant
-  // bits). The width of bi_buf must be at least 16 bits.
+  // 输出缓冲器。位从底部开始插入（最低有效位）
+  // 位）。 bi_buf 的宽度必须至少为 16 位。
   int bi_valid;
-  // Number of valid bits in bi_buf.  All bits above the last valid bit
-  // are always zero.
+  // bi_buf 中的有效位数。  最后有效位以上的所有位
+  // 总是为零。
   char *out_buf;
-  // Current output buffer.
+  // 当前输出缓冲区。
   unsigned out_offset;
-  // Current offset in output buffer.
-  // On 16 bit machines, the buffer is limited to 64K.
+  // 输出缓冲器中的当前偏移。
+  // 在 16 位机器上，缓冲区限制为 64K。
   unsigned out_size;
-  // Size of current output buffer
-  ulg bits_sent;   // bit length of the compressed data  only needed for debugging???
+  // 当前输出缓冲区的大小
+  ulg bits_sent;   // 压缩数据的位长度仅用于调试？？？
 };
 
 
@@ -500,81 +500,81 @@ class TDeflateState
   TDeflateState() {window_size=0;}
 
   uch    window[2L*WSIZE];
-  // Sliding window. Input bytes are read into the second half of the window,
-  // and move to the first half later to keep a dictionary of at least WSIZE
-  // bytes. With this organization, matches are limited to a distance of
-  // WSIZE-MAX_MATCH bytes, but this ensures that IO is always
-  // performed with a length multiple of the block size. Also, it limits
-  // the window size to 64K, which is quite useful on MSDOS.
-  // To do: limit the window size to WSIZE+CBSZ if SMALL_MEM (the code would
-  // be less efficient since the data would have to be copied WSIZE/CBSZ times)
+  // 滑动窗。输入字节被读入窗口的后半部分，
+  // 并稍后移至前半部分以保留至少 WSIZE 的字典
+  // 字节的字典。采用此布局时，匹配距离最大为
+  // WSIZE-MAX_MATCH 字节，但这可以确保 IO 始终
+  // 以块大小的长度倍数执行。而且，它限制了
+  // 窗口大小为 64K，这在 MSDOS 上非常有用。
+  // 要做的：如果 SMALL_MEM，则将窗口大小限制为 WSIZE+CBSZ（代码将
+  // 效率较低，因为数据必须复制 WSIZE/CBSZ 次）
   Pos    prev[WSIZE];
-  // Link to older string with same hash index. To limit the size of this
-  // array to 64K, this link is maintained only for the last 32K strings.
-  // An index in this array is thus a window index modulo 32K.
+  // 链接到具有相同哈希索引的旧字符串。限制这个的大小
+  // 数组到 64K 时，仅针对最后 32K 字符串维护此链接。
+  // 因此，该数组中的索引是窗口索引模 32K。
   Pos    head[HASH_SIZE];
-  // Heads of the hash chains or NIL. If your compiler thinks that
-  // HASH_SIZE is a dynamic value, recompile with -DDYN_ALLOC.
+  // 哈希链的头或 NIL。如果你的编译器认为
+  // HASH_SIZE是一个动态值，用-DDYN_ALLOC重新编译。
 
   ulg window_size;
-  // window size, 2*WSIZE except for MMAP or BIG_MEM, where it is the
-  // input file length plus MIN_LOOKAHEAD.
+  // 窗口大小，2*WSIZE，MMAP 或 BIG_MEM 除外，它是
+  // 输入文件长度加上 MIN_LOOKAHEAD。
 
   long block_start;
-  // window position at the beginning of the current output block. Gets
-  // negative when the window is moved backwards.
+  // 当前输出块开头的窗口位置。获取
+  // 当窗口向后移动时为负。
 
   int sliding;
-  // Set to false when the input file is already in memory
+  // 当输入文件已在内存中时设置为 false
 
-  unsigned ins_h;  // hash index of string to be inserted
+  unsigned ins_h;  // 要插入的字符串的哈希索引
 
   unsigned int prev_length;
-  // Length of the best match at previous step. Matches not greater than this
-  // are discarded. This is used in the lazy match evaluation.
+  // 上一步最佳匹配的长度。匹配不大于此
+  // 被丢弃。这用于惰性匹配评估。
 
-  unsigned strstart;         // start of string to insert
-  unsigned match_start; // start of matching string
-  int      eofile;           // flag set at end of input file
-  unsigned lookahead;        // number of valid bytes ahead in window
+  unsigned strstart;         // 要插入的字符串的开头
+  unsigned match_start; // 匹配字符串的开头
+  int      eofile;           // 在输入文件末尾设置标志
+  unsigned lookahead;        // 窗口中前面的有效字节数
 
   unsigned max_chain_length;
-  // To speed up deflation, hash chains are never searched beyond this length.
-  // A higher limit improves compression ratio but degrades the speed.
+  // 为加快 DEFLATE 压缩，搜索哈希链时不超过此长度。
+  // 较高的限制可以提高压缩比，但会降低速度。
 
   unsigned int max_lazy_match;
-  // Attempt to find a better match only when the current match is strictly
-  // smaller than this value. This mechanism is used only for compression
-  // levels >= 4.
+  // 仅当当前匹配严格时才尝试找到更好的匹配
+  // 小于该值。该机制仅用于压缩
+  // 级别 >= 4。
 
   unsigned good_match;
-  // Use a faster search when the previous match is longer than this
+  // 当上一个匹配比这个长时使用更快的搜索
 
-  int nice_match; // Stop searching when current match exceeds this
+  int nice_match; // 当当前匹配超过此值时停止搜索
 };
 
-typedef __int64 lutime_t;       // define it ourselves since we don't include time.h
+typedef __int64 lutime_t;       // 自己定义它，因为我们不包括 time.h
 
 typedef struct iztimes {
   lutime_t atime,mtime,ctime;
-} iztimes; // access, modify, create times
+} iztimes; // 访问、修改、创建时间
 
 typedef struct zlist {
-  ush vem, ver, flg, how;       // See central header in zipfile.c for what vem..off are
+  ush vem, ver, flg, how;       // 请参阅 zipfile.c 中的中央标头了解 vem..off 的含义
   ulg tim, crc, siz, len;
-  extent nam, ext, cext, com;   // offset of ext must be >= LOCHEAD
-  ush dsk, att, lflg;           // offset of lflg must be >= LOCHEAD
+  extent nam, ext, cext, com;   // ext 的偏移量必须 >= LOCHEAD
+  ush dsk, att, lflg;           // lflg 的偏移量必须 >= LOCHEAD
   ulg atx, off;
-  char name[MAX_PATH];          // File name in zip file
-  char *extra;                  // Extra field (set only if ext != 0)
-  char *cextra;                 // Extra in central (set only if cext != 0)
-  char *comment;                // Comment (set only if com != 0)
-  char iname[MAX_PATH];         // Internal file name after cleanup
-  char zname[MAX_PATH];         // External version of internal name
-  int mark;                     // Marker for files to operate on
-  int trash;                    // Marker for files to delete
-  int dosflag;                  // Set to force MSDOS file attributes
-  struct zlist far *nxt;        // Pointer to next header in list
+  char name[MAX_PATH];          // zip 文件中的文件名
+  char *extra;                  // 额外字段（仅当 ext != 0 时设置）
+  char *cextra;                 // 中央目录中的附加字段，仅当 cext != 0 时设置。
+  char *comment;                // 注释（仅当 com != 0 时设置）
+  char iname[MAX_PATH];         // 清理后的内部文件名
+  char zname[MAX_PATH];         // 内部名称的外部版本
+  int mark;                     // 要操作的文件的标记
+  int trash;                    // 要删除的文件标记
+  int dosflag;                  // 设置为强制 MSDOS 文件属性
+  struct zlist far *nxt;        // 指向列表中下一个标头的指针
 } TZipFileInfo;
 
 
@@ -608,7 +608,7 @@ void __cdecl Tracec(bool ,const char *x, ...) {va_list paramList; va_start(param
 
 
 // ===========================================================================
-// Local (static) routines in this file.
+// 该文件中的本地（静态）例程。
 //
 
 void init_block     (TState &);
@@ -629,41 +629,41 @@ void copy_block     (TState &state,char *buf, unsigned len, int header);
 
 
 #define send_code(state, c, tree) send_bits(state, tree[c].fc.code, tree[c].dl.len)
-// Send a code of the given tree. c and tree must not have side effects
+// 输出给定树中符号 c 的编码；参数 c 和 tree 的求值不能有副作用。
 
-// alternatively...
+// 或者...
 //#define send_code(state, c, tree)
 //     { if (state.verbose>1) fprintf(stderr,"\ncd %3d ",(c));
 //       send_bits(state, tree[c].fc.code, tree[c].dl.len); }
 
 #define d_code(dist) ((dist) < 256 ? state.ts.dist_code[dist] : state.ts.dist_code[256+((dist)>>7)])
-// Mapping from a distance to a distance code. dist is the distance - 1 and
-// must not have side effects. dist_code[256] and dist_code[257] are never used.
+// 从距离到距离代码的映射。 dist 是距离 - 1 并且
+// 一定不能有副作用。 dist_code[256] 和 dist_code[257] 从未使用过。
 
 #define Max(a,b) (a >= b ? a : b)
-/* the arguments must not have side effects */
+/* 参数不能有副作用 */
 
-/* ===========================================================================
- * Allocate the match buffer, initialize the various tables and save the
- * location of the internal file attribute (ascii/binary) and method
- * (DEFLATE/STORE).
+/* 分配匹配缓冲区并初始化各表，记录文件属性（ASCII/二进制）及压缩方式（DEFLATE/STORE）。
+ *
+ *
+ *
  */
 void ct_init(TState &state, ush *attr)
 {
-    int n;        /* iterates over tree elements */
-    int bits;     /* bit counter */
-    int length;   /* length value */
-    int code;     /* code value */
-    int dist;     /* distance index */
+    int n;        /* 迭代树元素 */
+    int bits;     /* 位计数器 */
+    int length;   /* 长度值。 */
+    int code;     /* 编码值。 */
+    int dist;     /* 距离索引。 */
 
     state.ts.file_type = attr;
-    //state.ts.file_method = method;
+    // state.ts.file_method = method; // 原先保存压缩方式的语句，继续保留为注释。
     state.ts.cmpr_bytelen = state.ts.cmpr_len_bits = 0L;
     state.ts.input_len = 0L;
 
-    if (state.ts.static_dtree[0].dl.len != 0) return; /* ct_init already called */
+    if (state.ts.static_dtree[0].dl.len != 0) return; /* ct_init 已调用 */
 
-    /* Initialize the mapping length (0..255) -> length code (0..28) */
+    /* 初始化映射长度(0..255) -> 长度代码(0..28) */
     length = 0;
     for (code = 0; code < LENGTH_CODES-1; code++) {
         state.ts.base_length[code] = length;
@@ -672,13 +672,13 @@ void ct_init(TState &state, ush *attr)
         }
     }
     Assert(state,length == 256, "ct_init: length != 256");
-    /* Note that the length 255 (match length 258) can be represented
-     * in two different ways: code 284 + 5 bits or code 285, so we
-     * overwrite length_code[255] to use the best encoding:
-     */
+    /* 长度值 255（实际匹配长度 258）可编码为 284 加 5 个附加位，或直接编码为 285；覆盖 length_code[255] 以采用更短的表示。
+ *
+ *
+ */
     state.ts.length_code[length-1] = (uch)code;
 
-    /* Initialize the mapping dist (0..32K) -> dist code (0..29) */
+    /* 初始化映射 dist (0..32K) -> dist 代码 (0..29) */
     dist = 0;
     for (code = 0 ; code < 16; code++) {
         state.ts.base_dist[code] = dist;
@@ -687,7 +687,7 @@ void ct_init(TState &state, ush *attr)
         }
     }
     Assert(state,dist == 256, "ct_init: dist != 256");
-    dist >>= 7; /* from now on, all distances are divided by 128 */
+    dist >>= 7; /* 从现在开始，所有距离都除以128 */
     for ( ; code < D_CODES; code++) {
         state.ts.base_dist[code] = dist << 7;
         for (n = 0; n < (1<<(extra_dbits[code]-7)); n++) {
@@ -696,37 +696,37 @@ void ct_init(TState &state, ush *attr)
     }
     Assert(state,dist == 256, "ct_init: 256+dist != 512");
 
-    /* Construct the codes of the static literal tree */
+    /* 构造静态字面值树的代码 */
     for (bits = 0; bits <= MAX_BITS; bits++) state.ts.bl_count[bits] = 0;
     n = 0;
     while (n <= 143) state.ts.static_ltree[n++].dl.len = 8, state.ts.bl_count[8]++;
     while (n <= 255) state.ts.static_ltree[n++].dl.len = 9, state.ts.bl_count[9]++;
     while (n <= 279) state.ts.static_ltree[n++].dl.len = 7, state.ts.bl_count[7]++;
     while (n <= 287) state.ts.static_ltree[n++].dl.len = 8, state.ts.bl_count[8]++;
-    /* fc.codes 286 and 287 do not exist, but we must include them in the
-     * tree construction to get a canonical Huffman tree (longest code
-     * all ones)
-     */
+    /* 符号 286 和 287 不实际使用，但构建静态树时必须包含它们，才能生成最长编码全为 1 的规范哈夫曼树。
+ *
+ *
+ */
     gen_codes(state,(ct_data *)state.ts.static_ltree, L_CODES+1);
 
-    /* The static distance tree is trivial: */
+    /* 静态距离树很简单： */
     for (n = 0; n < D_CODES; n++) {
         state.ts.static_dtree[n].dl.len = 5;
         state.ts.static_dtree[n].fc.code = (ush)bi_reverse(n, 5);
     }
 
-    /* Initialize the first block of the first file: */
+    /* 初始化第一个文件的第一个块： */
     init_block(state);
 }
 
-/* ===========================================================================
- * Initialize a new block.
+/* ===============================================================================
+ * 初始化一个新块。
  */
 void init_block(TState &state)
 {
-    int n; /* iterates over tree elements */
+    int n; /* 迭代树元素 */
 
-    /* Initialize the trees. */
+    /* 初始化树。 */
     for (n = 0; n < L_CODES;  n++) state.ts.dyn_ltree[n].fc.freq = 0;
     for (n = 0; n < D_CODES;  n++) state.ts.dyn_dtree[n].fc.freq = 0;
     for (n = 0; n < BL_CODES; n++) state.ts.bl_tree[n].fc.freq = 0;
@@ -738,12 +738,12 @@ void init_block(TState &state)
 }
 
 #define SMALLEST 1
-/* Index within the heap array of least frequent node in the Huffman tree */
+/* 哈夫曼树中出现次数最少的节点在堆数组中的位置。 */
 
 
-/* ===========================================================================
- * Remove the smallest element from the heap and recreate the heap with
- * one less element. Updates heap and heap_len.
+/* 删除堆中最小元素，并恢复减少一个元素后的堆结构；同时更新 heap 与 heap_len。
+ *
+ *
  */
 #define pqremove(tree, top) \
 {\
@@ -752,53 +752,53 @@ void init_block(TState &state)
     pqdownheap(state,tree, SMALLEST); \
 }
 
-/* ===========================================================================
- * Compares to subtrees, using the tree depth as tie breaker when
- * the subtrees have equal frequency. This minimizes the worst case length.
+/* 比较两个子树；出现次数相同时，以树深度决定先后，减小最坏情况下的编码长度。
+ *
+ *
  */
 #define smaller(tree, n, m) \
    (tree[n].fc.freq < tree[m].fc.freq || \
    (tree[n].fc.freq == tree[m].fc.freq && state.ts.depth[n] <= state.ts.depth[m]))
 
-/* ===========================================================================
- * Restore the heap property by moving down the tree starting at node k,
- * exchanging a node with the smallest of its two sons if necessary, stopping
- * when the heap property is re-established (each father smaller than its
- * two sons).
+/* 从节点 k 向下调整堆；必要时与两个子节点中较小者交换，直到所有父节点都小于其子节点。
+ *
+ *
+ *
+ *
  */
 void pqdownheap(TState &state,ct_data *tree, int k)
 {
     int v = state.ts.heap[k];
-    int j = k << 1;  /* left son of k */
-    int htemp;       /* required because of bug in SASC compiler */
+    int j = k << 1;  /* k 的左子节点。 */
+    int htemp;       /* 由于 SASC 编译器中的错误而需要 */
 
     while (j <= state.ts.heap_len) {
-        /* Set j to the smallest of the two sons: */
+        /* 令 j 指向两个子节点中较小的一个。 */
         if (j < state.ts.heap_len && smaller(tree, state.ts.heap[j+1], state.ts.heap[j])) j++;
 
-        /* Exit if v is smaller than both sons */
+        /* 若 v 小于两个子节点，则结束调整。 */
         htemp = state.ts.heap[j];
         if (smaller(tree, v, htemp)) break;
 
-        /* Exchange v with the smallest son */
+        /* 交换 v 与较小的子节点。 */
         state.ts.heap[k] = htemp;
         k = j;
 
-        /* And continue down the tree, setting j to the left son of k */
+        /* 继续沿着树向下，将 j 设置为 k 的左子 */
         j <<= 1;
     }
     state.ts.heap[k] = v;
 }
 
-/* ===========================================================================
- * Compute the optimal bit lengths for a tree and update the total bit length
- * for the current block.
- * IN assertion: the fields freq and dad are set, heap[heap_max] and
- *    above are the tree nodes sorted by increasing frequency.
- * OUT assertions: the field len is set to the optimal bit length, the
- *     array bl_count contains the frequencies for each bit length.
- *     The length opt_len is updated; static_len is also updated if stree is
- *     not null.
+/* 计算树的最优码长并更新当前块总位数。输入：freq、dad 已设置，heap[heap_max] 及其后节点按出现次数递增排列。输出：len 保存最优码长，bl_count 统计各码长数量，opt_len 更新；stree 非空时也更新 static_len。
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
  */
 void gen_bitlen(TState &state,tree_desc *desc)
 {
@@ -808,28 +808,28 @@ void gen_bitlen(TState &state,tree_desc *desc)
     int max_code        = desc->max_code;
     int max_length      = desc->max_length;
     ct_data *stree = desc->static_tree;
-    int h;              /* heap index */
-    int n, m;           /* iterate over the tree elements */
-    int bits;           /* bit length */
-    int xbits;          /* extra bits */
-    ush f;              /* frequency */
-    int overflow = 0;   /* number of elements with bit length too large */
+    int h;              /* 堆索引 */
+    int n, m;           /* 迭代树元素 */
+    int bits;           /* 码长。 */
+    int xbits;          /* 附加位数。 */
+    ush f;              /* 出现次数。 */
+    int overflow = 0;   /* 位长太大的元素数量 */
 
     for (bits = 0; bits <= MAX_BITS; bits++) state.ts.bl_count[bits] = 0;
 
-    /* In a first pass, compute the optimal bit lengths (which may
-     * overflow in the case of the bit length tree).
-     */
-    tree[state.ts.heap[state.ts.heap_max]].dl.len = 0; /* root of the heap */
+    /* 第一遍计算最优码长；对码长树而言，结果可能超过允许的最大码长。
+ *
+ */
+    tree[state.ts.heap[state.ts.heap_max]].dl.len = 0; /* 堆的根 */
 
     for (h = state.ts.heap_max+1; h < HEAP_SIZE; h++) {
         n = state.ts.heap[h];
         bits = tree[tree[n].dl.dad].dl.len + 1;
         if (bits > max_length) bits = max_length, overflow++;
         tree[n].dl.len = (ush)bits;
-        /* We overwrite tree[n].dl.dad which is no longer needed */
+        /* 我们覆盖不再需要的tree[n].dl.dad */
 
-        if (n > max_code) continue; /* not a leaf node */
+        if (n > max_code) continue; /* 不是叶节点 */
 
         state.ts.bl_count[bits]++;
         xbits = 0;
@@ -841,26 +841,26 @@ void gen_bitlen(TState &state,tree_desc *desc)
     if (overflow == 0) return;
 
     Trace("\nbit length overflow\n");
-    /* This happens for example on obj2 and pic of the Calgary corpus */
+    /* 例如，这种情况发生在卡尔加里语料库的 obj2 和 pic 上 */
 
-    /* Find the first bit length which could increase: */
+    /* 求第一个可能增加的位长度： */
     do {
         bits = max_length-1;
         while (state.ts.bl_count[bits] == 0) bits--;
-        state.ts.bl_count[bits]--;           /* move one leaf down the tree */
-        state.ts.bl_count[bits+1] += (ush)2; /* move one overflow item as its brother */
+        state.ts.bl_count[bits]--;           /* 将一个叶节点向下一层移动。 */
+        state.ts.bl_count[bits+1] += (ush)2; /* 将一个溢出项移作它的兄弟节点。 */
         state.ts.bl_count[max_length]--;
-        /* The brother of the overflow item also moves one step up,
-         * but this does not affect bl_count[max_length]
-         */
+        /* 溢出节点的兄弟节点也上移一层，但不会改变 bl_count[max_length]。
+ *
+ */
         overflow -= 2;
     } while (overflow > 0);
 
-    /* Now recompute all bit lengths, scanning in increasing frequency.
-     * h is still equal to HEAP_SIZE. (It is simpler to reconstruct all
-     * lengths instead of fixing only the wrong ones. This idea is taken
-     * from 'ar' written by Haruhiko Okumura.)
-     */
+    /* 按出现次数递增顺序重新计算所有码长，此时 h 仍为 HEAP_SIZE。整体重建比只修正错误码长更简单；此方法来自 Haruhiko Okumura 编写的 ar。
+ *
+ *
+ *
+ */
     for (bits = max_length; bits != 0; bits--) {
         n = state.ts.bl_count[bits];
         while (n != 0) {
@@ -876,30 +876,30 @@ void gen_bitlen(TState &state,tree_desc *desc)
     }
 }
 
-/* ===========================================================================
- * Generate the codes for a given tree and bit counts (which need not be
- * optimal).
- * IN assertion: the array bl_count contains the bit length statistics for
- * the given tree and the field len is set for all tree elements.
- * OUT assertion: the field code is set for all tree elements of non
- *     zero code length.
+/* 根据给定树和码长统计生成编码，不要求树本身最优。输入：bl_count 已统计各码长数量，所有节点 len 已设置。输出：为码长非零的节点设置 code。
+ *
+ *
+ *
+ *
+ *
+ *
  */
 void gen_codes (TState &state, ct_data *tree, int max_code)
 {
-    ush next_code[MAX_BITS+1]; /* next code value for each bit length */
-    ush code = 0;              /* running code value */
-    int bits;                  /* bit index */
-    int n;                     /* code index */
+    ush next_code[MAX_BITS+1]; /* 每个位长度的下一个代码值 */
+    ush code = 0;              /* 当前递推的编码值。 */
+    int bits;                  /* 位索引 */
+    int n;                     /* 编码索引。 */
 
-    /* The distribution counts are first used to generate the code values
-     * without bit reversal.
-     */
+    /* 先根据各码长数量生成尚未进行位序反转的编码值。
+ *
+ */
     for (bits = 1; bits <= MAX_BITS; bits++) {
         next_code[bits] = code = (ush)((code + state.ts.bl_count[bits-1]) << 1);
     }
-    /* Check that the bit counts in bl_count are consistent. The last code
-     * must be all ones.
-     */
+    /* 检查 bl_count 的码长统计是否一致；最后一个编码的所有位必须为 1。
+ *
+ */
     Assert(state,code + state.ts.bl_count[MAX_BITS]-1 == (1<< ((ush) MAX_BITS)) - 1,
             "inconsistent bit counts");
     Trace("\ngen_codes: max_code %d ", max_code);
@@ -907,34 +907,34 @@ void gen_codes (TState &state, ct_data *tree, int max_code)
     for (n = 0;  n <= max_code; n++) {
         int len = tree[n].dl.len;
         if (len == 0) continue;
-        /* Now reverse the bits */
+        /* 现在反转位 */
         tree[n].fc.code = (ush)bi_reverse(next_code[len]++, len);
 
         //Tracec(tree != state.ts.static_ltree, "\nn %3d %c l %2d c %4x (%x) ", n, (isgraph(n) ? n : ' '), len, tree[n].fc.code, next_code[len]-1);
     }
 }
 
-/* ===========================================================================
- * Construct one Huffman tree and assigns the code bit strings and lengths.
- * Update the total bit length for the current block.
- * IN assertion: the field freq is set for all tree elements.
- * OUT assertions: the fields len and code are set to the optimal bit length
- *     and corresponding code. The length opt_len is updated; static_len is
- *     also updated if stree is not null. The field max_code is set.
+/* 构建哈夫曼树并分配编码与码长，更新当前块总位数。输入：所有节点的 freq 已设置。输出：len、code 为最优码长与对应编码，更新 opt_len、max_code；stree 非空时也更新 static_len。
+ *
+ *
+ *
+ *
+ *
+ *
  */
 void build_tree(TState &state,tree_desc *desc)
 {
     ct_data *tree   = desc->dyn_tree;
     ct_data *stree  = desc->static_tree;
     int elems            = desc->elems;
-    int n, m;          /* iterate over heap elements */
-    int max_code = -1; /* largest code with non zero frequency */
-    int node = elems;  /* next internal node of the tree */
+    int n, m;          /* 迭代堆元素 */
+    int max_code = -1; /* 出现次数非零的最大编码编号。 */
+    int node = elems;  /* 树的下一个内部节点 */
 
-    /* Construct the initial heap, with least frequent element in
-     * heap[SMALLEST]. The sons of heap[n] are heap[2*n] and heap[2*n+1].
-     * heap[0] is not used.
-     */
+    /* 构建初始堆，出现次数最少的元素位于 heap[SMALLEST]。heap[n] 的子节点为 heap[2*n] 和 heap[2*n+1]，heap[0] 不使用。
+ *
+ *
+ */
     state.ts.heap_len = 0, state.ts.heap_max = HEAP_SIZE;
 
     for (n = 0; n < elems; n++) {
@@ -946,40 +946,40 @@ void build_tree(TState &state,tree_desc *desc)
         }
     }
 
-    /* The pkzip format requires that at least one distance code exists,
-     * and that at least one bit should be sent even if there is only one
-     * possible code. So to avoid special checks later on we force at least
-     * two codes of non zero frequency.
-     */
+    /* PKZIP 要求至少存在一个距离编码，即使只有一种可能编码也必须输出至少 1 位。为避免后续特殊分支，强制保留至少两个出现次数非零的编码。
+ *
+ *
+ *
+ */
     while (state.ts.heap_len < 2) {
         int newcp = state.ts.heap[++state.ts.heap_len] = (max_code < 2 ? ++max_code : 0);
         tree[newcp].fc.freq = 1;
         state.ts.depth[newcp] = 0;
         state.ts.opt_len--; if (stree) state.ts.static_len -= stree[newcp].dl.len;
-        /* new is 0 or 1 so it does not have extra bits */
+        /* new 是 0 或 1，因此它没有额外的位 */
     }
     desc->max_code = max_code;
 
-    /* The elements heap[heap_len/2+1 .. heap_len] are leaves of the tree,
-     * establish sub-heaps of increasing lengths:
-     */
+    /* 元素 heap[heap_len/2+1 .. heap_len] 是树的叶子，
+     * 建立长度递增的子堆：
+ */
     for (n = state.ts.heap_len/2; n >= 1; n--) pqdownheap(state,tree, n);
 
-    /* Construct the Huffman tree by repeatedly combining the least two
-     * frequent nodes.
-     */
+    /* 不断合并出现次数最少的两个节点，构建哈夫曼树。
+ *
+ */
     do {
-        pqremove(tree, n);   /* n = node of least frequency */
-        m = state.ts.heap[SMALLEST];  /* m = node of next least frequency */
+        pqremove(tree, n);   /* n 为出现次数最少的节点。 */
+        m = state.ts.heap[SMALLEST];  /* m 为出现次数次少的节点。 */
 
-        state.ts.heap[--state.ts.heap_max] = n; /* keep the nodes sorted by frequency */
+        state.ts.heap[--state.ts.heap_max] = n; /* 保持节点按出现次数排序 */
         state.ts.heap[--state.ts.heap_max] = m;
 
-        /* Create a new node father of n and m */
+        /* 创建 n 和 m 的新节点父节点 */
         tree[node].fc.freq = (ush)(tree[n].fc.freq + tree[m].fc.freq);
         state.ts.depth[node] = (uch) (Max(state.ts.depth[n], state.ts.depth[m]) + 1);
         tree[n].dl.dad = tree[m].dl.dad = (ush)node;
-        /* and insert the new node in the heap */
+        /* 并将新节点插入堆中 */
         state.ts.heap[SMALLEST] = node++;
         pqdownheap(state,tree, SMALLEST);
 
@@ -987,33 +987,33 @@ void build_tree(TState &state,tree_desc *desc)
 
     state.ts.heap[--state.ts.heap_max] = state.ts.heap[SMALLEST];
 
-    /* At this point, the fields freq and dad are set. We can now
-     * generate the bit lengths.
-     */
+    /* 此时 freq 和 dad 已设置，可以开始生成码长。
+ *
+ */
     gen_bitlen(state,(tree_desc *)desc);
 
-    /* The field len is now set, we can generate the bit codes */
+    /* 现在字段 len 已设置，我们可以生成位代码 */
     gen_codes (state,(ct_data *)tree, max_code);
 }
 
-/* ===========================================================================
- * Scan a literal or distance tree to determine the frequencies of the codes
- * in the bit length tree. Updates opt_len to take into account the repeat
- * counts. (The contribution of the bit length codes will be added later
- * during the construction of bl_tree.)
+/* 扫描字面值树或距离树，统计码长树中各编码的出现次数，并将重复次数的开销计入 opt_len；码长编码自身的开销在构建 bl_tree 时计入。
+ *
+ *
+ *
+ *
  */
 void scan_tree (TState &state,ct_data *tree, int max_code)
 {
-    int n;                     /* iterates over all tree elements */
-    int prevlen = -1;          /* last emitted length */
-    int curlen;                /* length of current code */
-    int nextlen = tree[0].dl.len; /* length of next code */
-    int count = 0;             /* repeat count of the current code */
-    int max_count = 7;         /* max repeat count */
-    int min_count = 4;         /* min repeat count */
+    int n;                     /* 迭代所有树元素 */
+    int prevlen = -1;          /* 上次输出的码长。 */
+    int curlen;                /* 当前编码的码长。 */
+    int nextlen = tree[0].dl.len; /* 下一个编码的码长。 */
+    int count = 0;             /* 当前代码的重复计数 */
+    int max_count = 7;         /* 最大重复次数。 */
+    int min_count = 4;         /* 最小重复次数。 */
 
     if (nextlen == 0) max_count = 138, min_count = 3;
-    tree[max_code+1].dl.len = (ush)-1; /* guard */
+    tree[max_code+1].dl.len = (ush)-1; /* 守卫 */
 
     for (n = 0; n <= max_code; n++) {
         curlen = nextlen; nextlen = tree[n+1].dl.len;
@@ -1040,21 +1040,21 @@ void scan_tree (TState &state,ct_data *tree, int max_code)
     }
 }
 
-/* ===========================================================================
- * Send a literal or distance tree in compressed form, using the codes in
- * bl_tree.
+/* 使用 bl_tree 的编码，以压缩形式输出字面值树或距离树。
+ *
+ *
  */
 void send_tree (TState &state, ct_data *tree, int max_code)
 {
-    int n;                     /* iterates over all tree elements */
-    int prevlen = -1;          /* last emitted length */
-    int curlen;                /* length of current code */
-    int nextlen = tree[0].dl.len; /* length of next code */
-    int count = 0;             /* repeat count of the current code */
-    int max_count = 7;         /* max repeat count */
-    int min_count = 4;         /* min repeat count */
+    int n;                     /* 迭代所有树元素 */
+    int prevlen = -1;          /* 上次输出的码长。 */
+    int curlen;                /* 当前编码的码长。 */
+    int nextlen = tree[0].dl.len; /* 下一个编码的码长。 */
+    int count = 0;             /* 当前代码的重复计数 */
+    int max_count = 7;         /* 最大重复次数。 */
+    int min_count = 4;         /* 最小重复次数。 */
 
-    /* tree[max_code+1].dl.len = -1; */  /* guard already set */
+    /* tree[max_code+1].dl.len = -1; // 原有哨兵设置语句，保持注释状态。 */  /* 警卫已经设置 */
     if (nextlen == 0) max_count = 138, min_count = 3;
 
     for (n = 0; n <= max_code; n++) {
@@ -1088,102 +1088,102 @@ void send_tree (TState &state, ct_data *tree, int max_code)
     }
 }
 
-/* ===========================================================================
- * Construct the Huffman tree for the bit lengths and return the index in
- * bl_order of the last bit length code to send.
+/* 构建码长的哈夫曼树，返回最后一个待发送码长编码在 bl_order 中的索引。
+ *
+ *
  */
 int build_bl_tree(TState &state)
 {
-    int max_blindex;  /* index of last bit length code of non zero freq */
+    int max_blindex;  /* 出现次数非零的最后一个码长编码的索引。 */
 
-    /* Determine the bit length frequencies for literal and distance trees */
+    /* 确定字面值树和距离树的位长度出现次数 */
     scan_tree(state,(ct_data *)state.ts.dyn_ltree, state.ts.l_desc.max_code);
     scan_tree(state,(ct_data *)state.ts.dyn_dtree, state.ts.d_desc.max_code);
 
-    /* Build the bit length tree: */
+    /* 构建位长树： */
     build_tree(state,(tree_desc *)(&state.ts.bl_desc));
-    /* opt_len now includes the length of the tree representations, except
-     * the lengths of the bit lengths codes and the 5+5+4 bits for the counts.
-     */
+    /* opt_len 此时已包含树结构的表示开销，但不包含码长编码自身以及计数字段的 5+5+4 位。
+ *
+ */
 
-    /* Determine the number of bit length codes to send. The pkzip format
-     * requires that at least 4 bit length codes be sent. (appnote.txt says
-     * 3 but the actual value used is 4.)
-     */
+    /* 确定需要发送的码长编码数量。PKZIP 实际要求至少发送 4 个，虽然 appnote.txt 文档写的是 3 个。
+ *
+ *
+ */
     for (max_blindex = BL_CODES-1; max_blindex >= 3; max_blindex--) {
         if (state.ts.bl_tree[bl_order[max_blindex]].dl.len != 0) break;
     }
-    /* Update opt_len to include the bit length tree and counts */
+    /* 更新 opt_len 以包含位长度树和计数 */
     state.ts.opt_len += 3*(max_blindex+1) + 5+5+4;
     Trace("\ndyn trees: dyn %ld, stat %ld", state.ts.opt_len, state.ts.static_len);
 
     return max_blindex;
 }
 
-/* ===========================================================================
- * Send the header for a block using dynamic Huffman trees: the counts, the
- * lengths of the bit length codes, the literal tree and the distance tree.
- * IN assertion: lcodes >= 257, dcodes >= 1, blcodes >= 4.
+/* 输出动态哈夫曼块头：编码数量、码长编码的长度、字面值树和距离树。前提：lcodes >= 257、dcodes >= 1、blcodes >= 4。
+ *
+ *
+ *
  */
 void send_all_trees(TState &state,int lcodes, int dcodes, int blcodes)
 {
-    int rank;                    /* index in bl_order */
+    int rank;                    /* bl_order 中的索引 */
 
     Assert(state,lcodes >= 257 && dcodes >= 1 && blcodes >= 4, "not enough codes");
     Assert(state,lcodes <= L_CODES && dcodes <= D_CODES && blcodes <= BL_CODES,
             "too many codes");
     Trace("\nbl counts: ");
     send_bits(state,lcodes-257, 5);
-    /* not +255 as stated in appnote.txt 1.93a or -256 in 2.04c */
+    /* 不是 appnote.txt 1.93a 中所述的 +255 或 2.04c 中的 -256 */
     send_bits(state,dcodes-1,   5);
-    send_bits(state,blcodes-4,  4); /* not -3 as stated in appnote.txt */
+    send_bits(state,blcodes-4,  4); /* 不是 appnote.txt 中所述的 -3 */
     for (rank = 0; rank < blcodes; rank++) {
         Trace("\nbl code %2d ", bl_order[rank]);
         send_bits(state,state.ts.bl_tree[bl_order[rank]].dl.len, 3);
     }    
     Trace("\nbl tree: sent %ld", state.bs.bits_sent);
 
-    send_tree(state,(ct_data *)state.ts.dyn_ltree, lcodes-1); /* send the literal tree */
+    send_tree(state,(ct_data *)state.ts.dyn_ltree, lcodes-1); /* 发送字面值树 */
     Trace("\nlit tree: sent %ld", state.bs.bits_sent);
 
-    send_tree(state,(ct_data *)state.ts.dyn_dtree, dcodes-1); /* send the distance tree */
+    send_tree(state,(ct_data *)state.ts.dyn_dtree, dcodes-1); /* 发送距离树 */
     Trace("\ndist tree: sent %ld", state.bs.bits_sent);
 }
 
-/* ===========================================================================
- * Determine the best encoding for the current block: dynamic trees, static
- * trees or store, and output the encoded block to the zip file. This function
- * returns the total compressed length (in bytes) for the file so far.
+/* 从动态树、静态树和直接存储中选择当前块的最佳方式，并将编码块写入 ZIP 文件；返回该文件截至当前累计的压缩字节数。
+ *
+ *
+ *
  */
 ulg flush_block(TState &state,char *buf, ulg stored_len, int eof)
 {
-    ulg opt_lenb, static_lenb; /* opt_len and static_len in bytes */
-    int max_blindex;  /* index of last bit length code of non zero freq */
+    ulg opt_lenb, static_lenb; /* opt_len 和 static_len 以字节为单位 */
+    int max_blindex;  /* 出现次数非零的最后一个码长编码的索引。 */
 
-    state.ts.flag_buf[state.ts.last_flags] = state.ts.flags; /* Save the flags for the last 8 items */
+    state.ts.flag_buf[state.ts.last_flags] = state.ts.flags; /* 保存最后 8 项的标志 */
 
-     /* Check if the file is ascii or binary */
+     /* 检查文件是ascii还是二进制 */
     if (*state.ts.file_type == (ush)UNKNOWN) set_file_type(state);
 
-    /* Construct the literal and distance trees */
+    /* 构建字面值树和距离树 */
     build_tree(state,(tree_desc *)(&state.ts.l_desc));
     Trace("\nlit data: dyn %ld, stat %ld", state.ts.opt_len, state.ts.static_len);
 
     build_tree(state,(tree_desc *)(&state.ts.d_desc));
     Trace("\ndist data: dyn %ld, stat %ld", state.ts.opt_len, state.ts.static_len);
-    /* At this point, opt_len and static_len are the total bit lengths of
-     * the compressed block data, excluding the tree representations.
-     */
+    /* 此时 opt_len 和 static_len 表示压缩块数据的总位数，尚不包括树结构的表示开销。
+ *
+ */
 
-    /* Build the bit length tree for the above two trees, and get the index
-     * in bl_order of the last bit length code to send.
-     */
+    /* 为字面值树和距离树构建码长树，取得最后一个待发送码长编码在 bl_order 中的索引。
+ *
+ */
     max_blindex = build_bl_tree(state);
 
-    /* Determine the best encoding. Compute first the block length in bytes */
+    /* 确定最佳编码。首先计算块长度（以字节为单位） */
     opt_lenb = (state.ts.opt_len+3+7)>>3;
     static_lenb = (state.ts.static_len+3+7)>>3;
-    state.ts.input_len += stored_len; /* for debugging only */
+    state.ts.input_len += stored_len; /* 仅用于调试 */
 
     Trace("\nopt %lu(%lu) stat %lu(%lu) stored %lu lit %u dist %u ",
             opt_lenb, state.ts.opt_len, static_lenb, state.ts.static_len, stored_len,
@@ -1191,34 +1191,34 @@ ulg flush_block(TState &state,char *buf, ulg stored_len, int eof)
 
     if (static_lenb <= opt_lenb) opt_lenb = static_lenb;
 
-    // Originally, zip allowed the file to be transformed from a compressed
-    // into a stored file in the case where compression failed, there
-    // was only one block, and it was allowed to change. I've removed this
-    // possibility since the code's cleaner if no changes are allowed.
+    // 最初，zip 允许将文件从压缩文件转换为
+    // 在压缩失败的情况下进入存储的文件，有
+    // 只有一个区块，并且允许改变。我已经删除了这个
+    // 可能性，因为如果不允许更改，代码会更干净。
     //if (stored_len <= opt_lenb && eof && state.ts.cmpr_bytelen == 0L
     //   && state.ts.cmpr_len_bits == 0L && state.seekable)
     //{   // && state.ts.file_method != NULL
-    //    // Since LIT_BUFSIZE <= 2*WSIZE, the input data must be there:
+    //     // LIT_BUFSIZE <= 2*WSIZE，因此输入数据仍应保留在窗口中。
     //    Assert(state,buf!=NULL,"block vanished");
-    //    copy_block(state,buf, (unsigned)stored_len, 0); // without header
+    //     copy_block(state,buf, (unsigned)stored_len, 0); // 不写块头。
     //    state.ts.cmpr_bytelen = stored_len;
     //    Assert(state,false,"unimplemented *state.ts.file_method = STORE;");
     //    //*state.ts.file_method = STORE;
     //}
-    //else
+    // 否则
     if (stored_len+4 <= opt_lenb && buf != (char*)NULL) {
-                       /* 4: two words for the lengths */
-        /* The test buf != NULL is only necessary if LIT_BUFSIZE > WSIZE.
-         * Otherwise we can't have processed more than WSIZE input bytes since
-         * the last block flush, because compression would have been
-         * successful. If LIT_BUFSIZE <= WSIZE, it is never too late to
-         * transform a block into a stored block.
-         */
-        send_bits(state,(STORED_BLOCK<<1)+eof, 3);  /* send block type */
+                       /* 长度与其反码各占一个 16 位字，共 4 字节。 */
+        /* 只有 LIT_BUFSIZE > WSIZE 时才必须检查 buf != NULL；否则上次输出后处理的输入不会超过 WSIZE，仍可将当前块改为直接存储块。
+ *
+ *
+ *
+ *
+ */
+        send_bits(state,(STORED_BLOCK<<1)+eof, 3);  /* 发送块类型 */
         state.ts.cmpr_bytelen += ((state.ts.cmpr_len_bits + 3 + 7) >> 3) + stored_len + 4;
         state.ts.cmpr_len_bits = 0L;
 
-        copy_block(state,buf, (unsigned)stored_len, 1); /* with header */
+        copy_block(state,buf, (unsigned)stored_len, 1); /* 带标题 */
     }
     else if (static_lenb == opt_lenb) {
         send_bits(state,(STATIC_TREES<<1)+eof, 3);
@@ -1241,26 +1241,26 @@ ulg flush_block(TState &state,char *buf, ulg stored_len, int eof)
     if (eof) {
         // Assert(state,input_len == isize, "bad input size");
         bi_windup(state);
-        state.ts.cmpr_len_bits += 7;  /* align on byte boundary */
+        state.ts.cmpr_len_bits += 7;  /* 在字节边界上对齐 */
     }
     Trace("\n");
 
     return state.ts.cmpr_bytelen + (state.ts.cmpr_len_bits >> 3);
 }
 
-/* ===========================================================================
- * Save the match info and tally the frequency counts. Return true if
- * the current block must be flushed.
+/* 保存匹配信息并累计符号出现次数；当前块需要输出时返回 true。
+ *
+ *
  */
 int ct_tally (TState &state,int dist, int lc)
 {
     state.ts.l_buf[state.ts.last_lit++] = (uch)lc;
     if (dist == 0) {
-        /* lc is the unmatched char */
+        /* 此时 lc 为未匹配的字节。 */
         state.ts.dyn_ltree[lc].fc.freq++;
     } else {
-        /* Here, lc is the match length - MIN_MATCH */
-        dist--;             /* dist = match distance - 1 */
+        /* 此时 lc 为匹配长度减去 MIN_MATCH。 */
+        dist--;             /* dist = 匹配距离 - 1 */
         Assert(state,(ush)dist < (ush)MAX_DIST &&
                (ush)lc <= (ush)(MAX_MATCH-MIN_MATCH) &&
                (ush)d_code(dist) < (ush)D_CODES,  "ct_tally: bad match");
@@ -1273,14 +1273,14 @@ int ct_tally (TState &state,int dist, int lc)
     }
     state.ts.flag_bit <<= 1;
 
-    /* Output the flags if they fill a byte: */
+    /* 如果标志填满一个字节，则输出标志： */
     if ((state.ts.last_lit & 7) == 0) {
         state.ts.flag_buf[state.ts.last_flags++] = state.ts.flags;
         state.ts.flags = 0, state.ts.flag_bit = 1;
     }
-    /* Try to guess if it is profitable to stop the current block here */
+    /* 尝试猜测在这里停止当前区块是否有利可图 */
     if (state.level > 2 && (state.ts.last_lit & 0xfff) == 0) {
-        /* Compute an upper bound for the compressed length */
+        /* 计算压缩长度的上限 */
         ulg out_length = (ulg)state.ts.last_lit*8L;
         ulg in_length = (ulg)state.ds.strstart-state.ds.block_start;
         int dcode;
@@ -1294,63 +1294,63 @@ int ct_tally (TState &state,int dist, int lc)
         if (state.ts.last_dist < state.ts.last_lit/2 && out_length < in_length/2) return 1;
     }
     return (state.ts.last_lit == LIT_BUFSIZE-1 || state.ts.last_dist == DIST_BUFSIZE);
-    /* We avoid equality with LIT_BUFSIZE because of wraparound at 64K
-     * on 16 bit machines and because stored blocks are restricted to
-     * 64K-1 bytes.
-     */
+    /* 避免计数恰好达到 LIT_BUFSIZE，以防 16 位系统在 64K 处回绕；直接存储块也限制为最多 64K-1 字节。
+ *
+ *
+ */
 }
 
-/* ===========================================================================
- * Send the block data compressed using the given Huffman trees
+/* ===============================================================================
+ * 发送使用给定的哈夫曼树压缩的块数据
  */
 void compress_block(TState &state,ct_data *ltree, ct_data *dtree)
 {
-    unsigned dist;      /* distance of matched string */
-    int lc;             /* match length or unmatched char (if dist == 0) */
-    unsigned lx = 0;    /* running index in l_buf */
-    unsigned dx = 0;    /* running index in d_buf */
-    unsigned fx = 0;    /* running index in flag_buf */
-    uch flag = 0;       /* current flags */
-    unsigned code;      /* the code to send */
-    int extra;          /* number of extra bits to send */
+    unsigned dist;      /* 匹配字符串的距离 */
+    int lc;             /* 匹配长度或不匹配的字符（如果 dist == 0） */
+    unsigned lx = 0;    /* l_buf 中的运行索引 */
+    unsigned dx = 0;    /* d_buf 中的运行索引 */
+    unsigned fx = 0;    /* flag_buf 中的运行索引 */
+    uch flag = 0;       /* 当前标志 */
+    unsigned code;      /* 要发送的代码 */
+    int extra;          /* 要发送的额外位数 */
 
     if (state.ts.last_lit != 0) do {
         if ((lx & 7) == 0) flag = state.ts.flag_buf[fx++];
         lc = state.ts.l_buf[lx++];
         if ((flag & 1) == 0) {
-            send_code(state,lc, ltree); /* send a literal byte */
+            send_code(state,lc, ltree); /* 发送一个字面值字节 */
         } else {
-            /* Here, lc is the match length - MIN_MATCH */
+            /* 这里，lc 是匹配长度 - MIN_MATCH */
             code = state.ts.length_code[lc];
-            send_code(state,code+LITERALS+1, ltree); /* send the length code */
+            send_code(state,code+LITERALS+1, ltree); /* 发送长度代码 */
             extra = extra_lbits[code];
             if (extra != 0) {
                 lc -= state.ts.base_length[code];
-                send_bits(state,lc, extra);        /* send the extra length bits */
+                send_bits(state,lc, extra);        /* 发送额外长度位 */
             }
             dist = state.ts.d_buf[dx++];
-            /* Here, dist is the match distance - 1 */
+            /* 这里，dist 是匹配距离 - 1 */
             code = d_code(dist);
             Assert(state,code < D_CODES, "bad d_code");
 
-            send_code(state,code, dtree);       /* send the distance code */
+            send_code(state,code, dtree);       /* 发送距离代码 */
             extra = extra_dbits[code];
             if (extra != 0) {
                 dist -= state.ts.base_dist[code];
-                send_bits(state,dist, extra);   /* send the extra distance bits */
+                send_bits(state,dist, extra);   /* 发送额外距离位 */
             }
-        } /* literal or match pair ? */
+        } /* 字面值或匹配对？ */
         flag >>= 1;
     } while (lx < state.ts.last_lit);
 
     send_code(state,END_BLOCK, ltree);
 }
 
-/* ===========================================================================
- * Set the file type to ASCII or BINARY, using a crude approximation:
- * binary if more than 20% of the bytes are <= 6 or >= 128, ascii otherwise.
- * IN assertion: the fields freq of dyn_ltree are set and the total of all
- * frequencies does not exceed 64K (to fit in an int on 16 bit machines).
+/* 粗略判断文件为 ASCII 或二进制：若超过 20% 的字节 <= 6 或 >= 128，则视为二进制。前提：dyn_ltree 的 freq 已设置，次数总和不超过 64K，以适应 16 位系统的 int。
+ *
+ *
+ *
+ *
  */
 void set_file_type(TState &state)
 {
@@ -1364,8 +1364,8 @@ void set_file_type(TState &state)
 }
 
 
-/* ===========================================================================
- * Initialize the bit string routines.
+/* ===============================================================================
+ * 初始化位串例程。
  */
 void bi_init (TState &state,char *tgt_buf, unsigned tgt_size, int flsh_allowed)
 {
@@ -1379,19 +1379,19 @@ void bi_init (TState &state,char *tgt_buf, unsigned tgt_size, int flsh_allowed)
     state.bs.bits_sent = 0L;
 }
 
-/* ===========================================================================
- * Send a value on a given number of bits.
- * IN assertion: length <= 16 and value fits in length bits.
+/* 按指定的位数输出数值。前提：length <= 16，且 value 能由 length 位表示。
+ *
+ *
  */
 void send_bits(TState &state,int value, int length)
 {
     Assert(state,length > 0 && length <= 15, "invalid length");
     state.bs.bits_sent += (ulg)length;
-    /* If not enough room in bi_buf, use (bi_valid) bits from bi_buf and
-     * (Buf_size - bi_valid) bits from value to flush the filled bi_buf,
-     * then fill in the rest of (value), leaving (length - (Buf_size-bi_valid))
-     * unused bits in bi_buf.
-     */
+    /* 若 bi_buf 空间不足，则合并已有的 bi_valid 位与 value 的部分低位，输出填满的缓冲区；随后保存 value 的剩余位。
+ *
+ *
+ *
+ */
     state.bs.bi_buf |= (value << state.bs.bi_valid);
     state.bs.bi_valid += length;
     if (state.bs.bi_valid > (int)Buf_size) {
@@ -1401,10 +1401,10 @@ void send_bits(TState &state,int value, int length)
     }
 }
 
-/* ===========================================================================
- * Reverse the first len bits of a code, using straightforward code (a faster
- * method would use a table)
- * IN assertion: 1 <= len <= 15
+/* 直接反转编码最低的 len 位；使用查表可进一步加速。前提：1 <= len <= 15。
+ *
+ *
+ *
  */
 unsigned bi_reverse(unsigned code, int len)
 {
@@ -1416,8 +1416,8 @@ unsigned bi_reverse(unsigned code, int len)
     return res >> 1;
 }
 
-/* ===========================================================================
- * Write out any remaining bits in an incomplete byte.
+/* 输出尚未形成完整字节的剩余位。
+ *
  */
 void bi_windup(TState &state)
 {
@@ -1434,13 +1434,13 @@ void bi_windup(TState &state)
     state.bs.bits_sent = (state.bs.bits_sent+7) & ~7;
 }
 
-/* ===========================================================================
- * Copy a stored block to the zip file, storing first the length and its
- * one's complement if requested.
+/* 将直接存储块复制到 ZIP 文件；需要块头时，先写长度和长度的反码。
+ *
+ *
  */
 void copy_block(TState &state, char *block, unsigned len, int header)
 {
-    bi_windup(state);              /* align on byte boundary */
+    bi_windup(state);              /* 按字节边界对齐。 */
 
     if (header) {
         PUTSHORT(state,(ush)len);
@@ -1467,8 +1467,8 @@ void copy_block(TState &state, char *block, unsigned len, int header)
 
 
 
-/* ===========================================================================
- *  Prototypes for functions.
+/* ===============================================================================
+ * 函数原型。
  */
 
 void fill_window  (TState &state);
@@ -1477,35 +1477,35 @@ ulg deflate_fast  (TState &state);
 int  longest_match (TState &state,IPos cur_match);
 
 
-/* ===========================================================================
- * Update a hash value with the given input byte
- * IN  assertion: all calls to to UPDATE_HASH are made with consecutive
- *    input characters, so that a running hash key can be computed from the
- *    previous key instead of complete recalculation each time.
+/* 用当前输入字节更新哈希值。前提：UPDATE_HASH 按连续输入字节调用，因此可从前一哈希值递推，无需完整重算。
+ *
+ *
+ *
+ *
  */
 #define UPDATE_HASH(h,c) (h = (((h)<<H_SHIFT) ^ (c)) & HASH_MASK)
 
-/* ===========================================================================
- * Insert string s in the dictionary and set match_head to the previous head
- * of the hash chain (the most recent string with same hash key). Return
- * the previous length of the hash chain.
- * IN  assertion: all calls to to INSERT_STRING are made with consecutive
- *    input characters and the first MIN_MATCH bytes of s are valid
- *    (except for the last MIN_MATCH-1 bytes of the input file).
+/* 将字符串 s 插入字典，并把 match_head 设为原哈希链头，即同哈希值的最近字符串；返回原链长。前提：按连续输入字节调用，除文件最后 MIN_MATCH-1 字节外，s 的前 MIN_MATCH 字节均有效。
+ *
+ *
+ *
+ *
+ *
+ *
  */
 #define INSERT_STRING(s, match_head) \
    (UPDATE_HASH(state.ds.ins_h, state.ds.window[(s) + (MIN_MATCH-1)]), \
     state.ds.prev[(s) & WMASK] = match_head = state.ds.head[state.ds.ins_h], \
     state.ds.head[state.ds.ins_h] = (s))
 
-/* ===========================================================================
- * Initialize the "longest match" routines for a new file
+/* 为新文件初始化最长匹配状态。若输入已读入或映射到 window[]，window_size > 0，且须容纳整个输入及额外 MIN_LOOKAHEAD 字节；否则 window_size 为 0。额外空间用于避免文件尾部匹配时越界读取。
  *
- * IN assertion: window_size is > 0 if the input file is already read or
- *    mmap'ed in the window[] array, 0 otherwise. In the first case,
- *    window_size is sufficient to contain the whole input file plus
- *    MIN_LOOKAHEAD bytes (to avoid referencing memory beyond the end
- *    of window[] when looking for matches towards the end).
+ *
+ *
+ *
+ *
+ *
+ *
  */
 void lm_init (TState &state, int pack_level, ush *flags)
 {
@@ -1513,23 +1513,23 @@ void lm_init (TState &state, int pack_level, ush *flags)
 
     Assert(state,pack_level>=1 && pack_level<=8,"bad pack level");
 
-    /* Do not slide the window if the whole input is already in memory
-     * (window_size > 0)
-     */
+    /* 如果全部输入已在内存中（window_size > 0），则不滑动窗口。
+ *
+ */
     state.ds.sliding = 0;
     if (state.ds.window_size == 0L) {
         state.ds.sliding = 1;
         state.ds.window_size = (ulg)2L*WSIZE;
     }
 
-    /* Initialize the hash table (avoiding 64K overflow for 16 bit systems).
-     * prev[] will be initialized on the fly.
-     */
+    /* 初始化哈希表，避免 16 位系统的 64K 溢出；prev[] 在后续处理中逐步初始化。
+ *
+ */
     state.ds.head[HASH_SIZE-1] = NIL;
     memset((char*)state.ds.head, NIL, (unsigned)(HASH_SIZE-1)*sizeof(*state.ds.head));
 
-    /* Set the default configuration parameters:
-     */
+    /* 设置默认配置参数：
+ */
     state.ds.max_lazy_match   = configuration_table[pack_level].max_lazy;
     state.ds.good_match       = configuration_table[pack_level].good_length;
     state.ds.nice_match       = configuration_table[pack_level].nice_length;
@@ -1539,13 +1539,13 @@ void lm_init (TState &state, int pack_level, ush *flags)
     } else if (pack_level >= 8) {
        *flags |= SLOW;
     }
-    /* ??? reduce max_chain_length for binary files */
+    /* 原作者待优化项：对二进制文件减小 max_chain_length。 */
 
     state.ds.strstart = 0;
     state.ds.block_start = 0L;
 
     j = WSIZE;
-    j <<= 1; // Can read 64K in one step
+    j <<= 1; // 一次可以读取 64K 数据。
     state.ds.lookahead = state.readfunc(state, (char*)state.ds.window, j);
 
     if (state.ds.lookahead == 0 || state.ds.lookahead == (unsigned)EOF) {
@@ -1553,44 +1553,44 @@ void lm_init (TState &state, int pack_level, ush *flags)
        return;
     }
     state.ds.eofile = 0;
-    /* Make sure that we always have enough lookahead. This is important
-     * if input comes from a device such as a tty.
-     */
+    /* 确保有足够的前瞻数据，输入来自终端等设备时尤其需要如此。
+ *
+ */
     if (state.ds.lookahead < MIN_LOOKAHEAD) fill_window(state);
 
     state.ds.ins_h = 0;
     for (j=0; j<MIN_MATCH-1; j++) UPDATE_HASH(state.ds.ins_h, state.ds.window[j]);
-    /* If lookahead < MIN_MATCH, ins_h is garbage, but this is
-     * not important since only literal bytes will be emitted.
-     */
+    /* lookahead < MIN_MATCH 时 ins_h 无有效含义；此时只输出字面值字节，因此不会使用它。
+ *
+ */
 }
 
 
-/* ===========================================================================
- * Set match_start to the longest match starting at the given string and
- * return its length. Matches shorter or equal to prev_length are discarded,
- * in which case the result is equal to prev_length and match_start is
- * garbage.
- * IN assertions: cur_match is the head of the hash chain for the current
- *   string (strstart) and its distance is <= MAX_DIST, and prev_length >= 1
+/* 查找给定字符串的最长匹配，将起点存入 match_start 并返回长度。长度不超过 prev_length 的匹配被舍弃，此时返回 prev_length，match_start 无效。前提：cur_match 为当前 strstart 的哈希链头，距离 <= MAX_DIST，prev_length >= 1。
+ *
+ *
+ *
+ *
+ *
+ *
  */
-// For 80x86 and 680x0 and ARM, an optimized version is in match.asm or
-// match.S. The code is functionally equivalent, so you can use the C version
-// if desired. Which I do so desire!
+// 对于 80x86 和 680x0 以及 ARM，优化版本位于 match.asm 或
+// 匹配.S.该代码在功能上是等效的，因此您可以使用 C 版本
+// 如果需要的话。这是我如此渴望的！
 int longest_match(TState &state,IPos cur_match)
 {
-    unsigned chain_length = state.ds.max_chain_length;   /* max hash chain length */
-    register uch far *scan = state.ds.window + state.ds.strstart; /* current string */
-    register uch far *match;                    /* matched string */
-    register int len;                           /* length of current match */
-    int best_len = state.ds.prev_length;                 /* best match length so far */
+    unsigned chain_length = state.ds.max_chain_length;   /* 哈希链的最大搜索长度。 */
+    register uch far *scan = state.ds.window + state.ds.strstart; /* 当前待匹配字符串。 */
+    register uch far *match;                    /* 候选匹配字符串。 */
+    register int len;                           /* 当前匹配长度。 */
+    int best_len = state.ds.prev_length;                 /* 目前找到的最佳匹配长度。 */
     IPos limit = state.ds.strstart > (IPos)MAX_DIST ? state.ds.strstart - (IPos)MAX_DIST : NIL;
-    /* Stop when cur_match becomes <= limit. To simplify the code,
-     * we prevent matches with the string of window index 0.
-     */
+    /* cur_match <= limit 时停止搜索；为简化处理，不匹配窗口索引 0 处的字符串。
+ *
+ */
 
-  // The code is optimized for HASH_BITS >= 8 and MAX_MATCH-2 multiple of 16.
-  // It is easy to get rid of this optimization if necessary.
+  // 该代码针对 HASH_BITS >= 8 和 MAX_MATCH-2 16 的倍数进行了优化。
+  // 如有必要，很容易摆脱这种优化。
     Assert(state,HASH_BITS>=8 && MAX_MATCH==258,"Code too clever");
 
 
@@ -1599,7 +1599,7 @@ int longest_match(TState &state,IPos cur_match)
     register uch scan_end1  = scan[best_len-1];
     register uch scan_end   = scan[best_len];
 
-    /* Do not waste too much time if we already have a good match: */
+    /* 如果我们已经有很好的匹配，请不要浪费太多时间： */
     if (state.ds.prev_length >= state.ds.good_match) {
         chain_length >>= 2;
     }
@@ -1610,25 +1610,25 @@ int longest_match(TState &state,IPos cur_match)
         Assert(state,cur_match < state.ds.strstart, "no future");
         match = state.ds.window + cur_match;
 
-        /* Skip to next match if the match length cannot increase
-         * or if the match length is less than 2:
-         */
+        /* 如果候选不能增加最佳匹配长度，或者最初两个字节不匹配，则继续检查链中的下一个候选。
+ *
+ */
         if (match[best_len]   != scan_end  ||
             match[best_len-1] != scan_end1 ||
             *match            != *scan     ||
             *++match          != scan[1])      continue;
 
-        /* The check at best_len-1 can be removed because it will be made
-         * again later. (This heuristic is not always a win.)
-         * It is not necessary to compare scan[2] and match[2] since they
-         * are always equal when the other bytes match, given that
-         * the hash keys are equal and that HASH_BITS >= 8.
-         */
+        /* best_len-1 处的比较后面会再次执行，理论上可省略，但此启发式检查并非总能加速。由于哈希值相同且 HASH_BITS >= 8，在其他字节匹配时 scan[2] 与 match[2] 也必然相同，无需额外比较。
+ *
+ *
+ *
+ *
+ */
         scan += 2, match++;
 
-        /* We check for insufficient lookahead only every 8th comparison;
-         * the 256th check will be made at strstart+258.
-         */
+        /* 每比较 8 个字节才检查一次前瞻数据边界；第 256 次比较的边界检查位于 strstart+258。
+ *
+ */
         do {
         } while (*++scan == *++match && *++scan == *++match &&
                  *++scan == *++match && *++scan == *++match &&
@@ -1658,60 +1658,60 @@ int longest_match(TState &state,IPos cur_match)
 
 
 #define check_match(state,start, match, length)
-// or alternatively...
+// 另一种匹配检查实现，继续保留为注释。
 //void check_match(TState &state,IPos start, IPos match, int length)
-//{ // check that the match is indeed a match
+// { // 检查候选内容是否确实匹配。
 //    if (memcmp((char*)state.ds.window + match,
-//                (char*)state.ds.window + start, length) != EQUAL) {
-//        fprintf(stderr,
-//            " start %d, match %d, length %d\n",
-//            start, match, length);
+// (char*)state.ds.window + 开始, 长度) != EQUAL) {
+// fprintf（标准错误，
+// " 起始 %d，匹配 %d，长度 %d\n",
+// 开始、匹配、长度）；
 //        error("invalid match");
 //    }
 //    if (state.verbose > 1) {
 //        fprintf(stderr,"\\[%d,%d]", start-match, length);
-//        do { fprintf(stdout,"%c",state.ds.window[start++]); } while (--length != 0);
+// do { fprintf(stdout,"%c",state.ds.window[start++]); while (--长度！= 0);
 //    }
 //}
 
-/* ===========================================================================
- * Fill the window when the lookahead becomes insufficient.
- * Updates strstart and lookahead, and sets eofile if end of input file.
+/* 前瞻数据不足时填充窗口，更新 strstart 和 lookahead，读到末尾时设置 eofile。输入前提：lookahead < MIN_LOOKAHEAD 且 strstart + lookahead > 0。完成后 strstart <= window_size-MIN_LOOKAHEAD；至少读入一个字节或设置 eofile。读取请求至少为两字节，以满足 translate_eol 选项。
  *
- * IN assertion: lookahead < MIN_LOOKAHEAD && strstart + lookahead > 0
- * OUT assertions: strstart <= window_size-MIN_LOOKAHEAD
- *    At least one byte has been read, or eofile is set; file reads are
- *    performed for at least two bytes (required for the translate_eol option).
+ *
+ *
+ *
+ *
+ *
+ *
  */
 void fill_window(TState &state)
 {
     register unsigned n, m;
-    unsigned more;    /* Amount of free space at the end of the window. */
+    unsigned more;    /* 窗口末尾的剩余空间。 */
 
     do {
         more = (unsigned)(state.ds.window_size - (ulg)state.ds.lookahead - (ulg)state.ds.strstart);
 
-        /* If the window is almost full and there is insufficient lookahead,
-         * move the upper half to the lower one to make room in the upper half.
-         */
+        /* 窗口接近满且前瞻不足时，将后半窗口移到前半，为后续输入腾出空间。
+ *
+ */
         if (more == (unsigned)EOF) {
-            /* Very unlikely, but possible on 16 bit machine if strstart == 0
-             * and lookahead == 1 (input done one byte at time)
-             */
+            /* 16 位系统上，若每次只读一个字节，strstart == 0 且 lookahead == 1 时仍可能出现此情况。
+ *
+ */
             more--;
 
-        /* For MMAP or BIG_MEM, the whole input file is already in memory so
-         * we must not perform sliding. We must however call (*read_buf)() in
-         * order to compute the crc, update lookahead and possibly set eofile.
-         */
+        /* MMAP 或 BIG_MEM 模式下全部输入已在内存中，不能滑动窗口；但仍需调用 read_buf 以更新 CRC、lookahead，并在需要时设置 eofile。
+ *
+ *
+ */
         } else if (state.ds.strstart >= WSIZE+MAX_DIST && state.ds.sliding) {
 
-            /* By the IN assertion, the window is not empty so we can't confuse
-             * more == 0 with more == 64K on a 16 bit machine.
-             */
+            /* 根据入口条件窗口非空，因此 16 位系统上不会混淆 more == 0 与 more == 64K。
+ *
+ */
             memcpy((char*)state.ds.window, (char*)state.ds.window+WSIZE, (unsigned)WSIZE);
             state.ds.match_start -= WSIZE;
-            state.ds.strstart    -= WSIZE; /* we now have strstart >= MAX_DIST: */
+            state.ds.strstart    -= WSIZE; /* 此时 strstart 已不小于 MAX_DIST。 */
 
             state.ds.block_start -= (long) WSIZE;
 
@@ -1722,25 +1722,25 @@ void fill_window(TState &state)
             for (n = 0; n < WSIZE; n++) {
                 m = state.ds.prev[n];
                 state.ds.prev[n] = (Pos)(m >= WSIZE ? m-WSIZE : NIL);
-                /* If n is not on any hash chain, prev[n] is garbage but
-                 * its value will never be used.
-                 */
+                /* 如果 n 不属于任何哈希链，prev[n] 可以没有有效值，因为该值不会被使用。
+ *
+ */
             }
             more += WSIZE;
         }
         if (state.ds.eofile) return;
 
-        /* If there was no sliding:
-         *    strstart <= WSIZE+MAX_DIST-1 && lookahead <= MIN_LOOKAHEAD - 1 &&
-         *    more == window_size - lookahead - strstart
-         * => more >= window_size - (MIN_LOOKAHEAD-1 + WSIZE + MAX_DIST-1)
-         * => more >= window_size - 2*WSIZE + 2
-         * In the MMAP or BIG_MEM case (not yet supported in gzip),
-         *   window_size == input_size + MIN_LOOKAHEAD  &&
-         *   strstart + lookahead <= input_size => more >= MIN_LOOKAHEAD.
-         * Otherwise, window_size == 2*WSIZE so more >= 2.
-         * If there was sliding, more >= WSIZE. So in all cases, more >= 2.
-         */
+        /* 若未滑动窗口，有 strstart <= WSIZE+MAX_DIST-1、lookahead <= MIN_LOOKAHEAD-1，且 more = window_size-lookahead-strstart，故 more >= window_size-2*WSIZE+2。MMAP/BIG_MEM 时 window_size = input_size+MIN_LOOKAHEAD，可得 more >= MIN_LOOKAHEAD；普通窗口大小为 2*WSIZE，故 more >= 2。若发生滑动，则 more >= WSIZE。因此所有情况下 more >= 2。
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ */
         Assert(state,more >= 2, "more < 2");
 
         n = state.readfunc(state, (char*)state.ds.window+state.ds.strstart+state.ds.lookahead, more);
@@ -1753,48 +1753,48 @@ void fill_window(TState &state)
     } while (state.ds.lookahead < MIN_LOOKAHEAD && !state.ds.eofile);
 }
 
-/* ===========================================================================
- * Flush the current block, with given end-of-file flag.
- * IN assertion: strstart is set to the end of the current match.
+/* 按给定的输入结束标记输出当前块；前提：strstart 已指向当前匹配结束位置。
+ *
+ *
  */
 #define FLUSH_BLOCK(state,eof) \
    flush_block(state,state.ds.block_start >= 0L ? (char*)&state.ds.window[(unsigned)state.ds.block_start] : \
                 (char*)NULL, (long)state.ds.strstart - state.ds.block_start, (eof))
 
-/* ===========================================================================
- * Processes a new input file and return its compressed length. This
- * function does not perform lazy evaluation of matches and inserts
- * new strings in the dictionary only for unmatched strings or for short
- * matches. It is used only for the fast compression options.
+/* 处理新输入并返回压缩长度。此快速压缩算法不进行惰性匹配，只对未匹配位置或较短匹配中的字符串插入字典。
+ *
+ *
+ *
+ *
  */
 ulg deflate_fast(TState &state)
 {
-    IPos hash_head = NIL;       /* head of the hash chain */
-    int flush;                  /* set if current block must be flushed */
-    unsigned match_length = 0;  /* length of best match */
+    IPos hash_head = NIL;       /* 哈希链的头部 */
+    int flush;                  /* 当前数据块需要输出时置位。 */
+    unsigned match_length = 0;  /* 最佳匹配的长度。 */
 
     state.ds.prev_length = MIN_MATCH-1;
     while (state.ds.lookahead != 0) {
-        /* Insert the string window[strstart .. strstart+2] in the
-         * dictionary, and set hash_head to the head of the hash chain:
-         */
+        /* 将 window[strstart .. strstart+2] 插入字典，并将 hash_head 设为对应哈希链的头节点。
+ *
+ */
         if (state.ds.lookahead >= MIN_MATCH)
         INSERT_STRING(state.ds.strstart, hash_head);
 
-        /* Find the longest match, discarding those <= prev_length.
-         * At this point we have always match_length < MIN_MATCH
-         */
+        /* 搜索最长匹配，舍弃长度 <= prev_length 的候选；此时初始 match_length < MIN_MATCH。
+ *
+ */
         if (hash_head != NIL && state.ds.strstart - hash_head <= MAX_DIST) {
-            /* To simplify the code, we prevent matches with the string
-             * of window index 0 (in particular we have to avoid a match
-             * of the string with itself at the start of the input file).
-             */
-            /* Do not look for matches beyond the end of the input.
-             * This is necessary to make deflate deterministic.
-             */
+            /* 为简化处理，不与窗口索引 0 处的字符串匹配，尤其避免输入起点处字符串匹配自身。
+ *
+ *
+ */
+            /* 不在输入末尾之外搜索匹配，保证 DEFLATE 输出具有确定性。
+ *
+ */
             if ((unsigned)state.ds.nice_match > state.ds.lookahead) state.ds.nice_match = (int)state.ds.lookahead;
             match_length = longest_match (state,hash_head);
-            /* longest_match() sets match_start */
+            /* longest_match() 设置 match_start */
             if (match_length > state.ds.lookahead) match_length = state.ds.lookahead;
         }
         if (match_length >= MIN_MATCH) {
@@ -1804,18 +1804,18 @@ ulg deflate_fast(TState &state)
 
             state.ds.lookahead -= match_length;
 
-            /* Insert new strings in the hash table only if the match length
-             * is not too large. This saves time but degrades compression.
-             */
+            /* 仅在匹配长度较小时将中间字符串插入哈希表，以减少耗时，但可能降低压缩率。
+ *
+ */
             if (match_length <= state.ds.max_insert_length
                 && state.ds.lookahead >= MIN_MATCH) {
-                match_length--; /* string at strstart already in hash table */
+                match_length--; /* strstart 处的字符串已经位于哈希表中。 */
                 do {
                     state.ds.strstart++;
                     INSERT_STRING(state.ds.strstart, hash_head);
-                    /* strstart never exceeds WSIZE-MAX_MATCH, so there are
-                     * always MIN_MATCH bytes ahead.
-                     */
+                    /* strstart 不超过 WSIZE-MAX_MATCH，因此前方始终保留至少 MIN_MATCH 字节。
+ *
+ */
                 } while (--match_length != 0);
                 state.ds.strstart++;
             } else {
@@ -1826,92 +1826,92 @@ ulg deflate_fast(TState &state)
                 Assert(state,MIN_MATCH==3,"Call UPDATE_HASH() MIN_MATCH-3 more times");
             }
         } else {
-            /* No match, output a literal byte */
+            /* 不匹配，输出一个字面值字节 */
             flush = ct_tally (state,0, state.ds.window[state.ds.strstart]);
             state.ds.lookahead--;
             state.ds.strstart++;
         }
         if (flush) FLUSH_BLOCK(state,0), state.ds.block_start = state.ds.strstart;
 
-        /* Make sure that we always have enough lookahead, except
-         * at the end of the input file. We need MAX_MATCH bytes
-         * for the next match, plus MIN_MATCH bytes to insert the
-         * string following the next match.
-         */
+        /* 除输入末尾外，始终保留足够前瞻数据：下次匹配需要 MAX_MATCH 字节，匹配后插入字典还需要 MIN_MATCH 字节。
+ *
+ *
+ *
+ */
         if (state.ds.lookahead < MIN_LOOKAHEAD) fill_window(state);
     }
-    return FLUSH_BLOCK(state,1); /* eof */
+    return FLUSH_BLOCK(state,1); /* 输入结束。 */
 }
 
-/* ===========================================================================
- * Same as above, but achieves better compression. We use a lazy
- * evaluation for matches: a match is finally adopted only if there is
- * no better match at the next window position.
+/* 通过惰性匹配获得更好的压缩率：只有下一窗口位置不存在更优匹配时，才最终采用当前匹配。
+ *
+ *
+ *
  */
 ulg deflate(TState &state)
 {
-    IPos hash_head = NIL;       /* head of hash chain */
-    IPos prev_match;            /* previous match */
-    int flush;                  /* set if current block must be flushed */
-    int match_available = 0;    /* set if previous match exists */
-    register unsigned match_length = MIN_MATCH-1; /* length of best match */
+    IPos hash_head = NIL;       /* 哈希链头 */
+    IPos prev_match;            /* 上一次的匹配位置。 */
+    int flush;                  /* 当前数据块需要输出时置位。 */
+    int match_available = 0;    /* 上一次存在待输出匹配时置位。 */
+    register unsigned match_length = MIN_MATCH-1; /* 最佳匹配的长度。 */
 
-    if (state.level <= 3) return deflate_fast(state); /* optimized for speed */
+    if (state.level <= 3) return deflate_fast(state); /* 速度优化 */
 
-    /* Process the input block. */
+    /* 处理输入块。 */
     while (state.ds.lookahead != 0) {
-        /* Insert the string window[strstart .. strstart+2] in the
-         * dictionary, and set hash_head to the head of the hash chain:
-         */
+        /* 将 window[strstart .. strstart+2] 插入字典，并将 hash_head 设为对应哈希链的头节点。
+ *
+ */
         if (state.ds.lookahead >= MIN_MATCH)
         INSERT_STRING(state.ds.strstart, hash_head);
 
-        /* Find the longest match, discarding those <= prev_length.
-         */
+        /* 搜索最长匹配，舍弃长度不超过 prev_length 的候选。
+ */
         state.ds.prev_length = match_length, prev_match = state.ds.match_start;
         match_length = MIN_MATCH-1;
 
         if (hash_head != NIL && state.ds.prev_length < state.ds.max_lazy_match &&
             state.ds.strstart - hash_head <= MAX_DIST) {
-            /* To simplify the code, we prevent matches with the string
-             * of window index 0 (in particular we have to avoid a match
-             * of the string with itself at the start of the input file).
-             */
-            /* Do not look for matches beyond the end of the input.
-             * This is necessary to make deflate deterministic.
-             */
+            /* 不与窗口索引 0 处的字符串匹配，尤其避免在输入起点匹配字符串自身。
+ *
+ *
+ */
+            /* 不在输入末尾之外搜索匹配，保证 DEFLATE 输出具有确定性。
+ *
+ */
             if ((unsigned)state.ds.nice_match > state.ds.lookahead) state.ds.nice_match = (int)state.ds.lookahead;
             match_length = longest_match (state,hash_head);
-            /* longest_match() sets match_start */
+            /* longest_match() 设置 match_start */
             if (match_length > state.ds.lookahead) match_length = state.ds.lookahead;
 
-            /* Ignore a length 3 match if it is too distant: */
+            /* 如果长度为 3 的匹配距离太远，则忽略它： */
             if (match_length == MIN_MATCH && state.ds.strstart-state.ds.match_start > TOO_FAR){
-                /* If prev_match is also MIN_MATCH, match_start is garbage
-                 * but we will ignore the current match anyway.
-                 */
+                /* 如果 prev_match 同样为 MIN_MATCH，则 match_start 无效；但当前匹配无论如何都会被忽略。
+ *
+ */
                 match_length = MIN_MATCH-1;
             }
         }
-        /* If there was a match at the previous step and the current
-         * match is not better, output the previous match:
-         */
+        /* 若上一步存在匹配且当前匹配没有更优，则输出上一步的匹配。
+ *
+ */
         if (state.ds.prev_length >= MIN_MATCH && match_length <= state.ds.prev_length) {
             unsigned max_insert = state.ds.strstart + state.ds.lookahead - MIN_MATCH;
             check_match(state,state.ds.strstart-1, prev_match, state.ds.prev_length);
             flush = ct_tally(state,state.ds.strstart-1-prev_match, state.ds.prev_length - MIN_MATCH);
 
-            /* Insert in hash table all strings up to the end of the match.
-             * strstart-1 and strstart are already inserted.
-             */
+            /* 将直到匹配末尾的各字符串插入哈希表；strstart-1 和 strstart 已经插入。
+ *
+ */
             state.ds.lookahead -= state.ds.prev_length-1;
             state.ds.prev_length -= 2;
             do {
                 if (++state.ds.strstart <= max_insert) {
                     INSERT_STRING(state.ds.strstart, hash_head);
-                    /* strstart never exceeds WSIZE-MAX_MATCH, so there are
-                     * always MIN_MATCH bytes ahead.
-                     */
+                    /* strstart 不超过 WSIZE-MAX_MATCH，因此前方始终保留至少 MIN_MATCH 字节。
+ *
+ */
                 }
             } while (--state.ds.prev_length != 0);
             state.ds.strstart++;
@@ -1921,35 +1921,35 @@ ulg deflate(TState &state)
             if (flush) FLUSH_BLOCK(state,0), state.ds.block_start = state.ds.strstart;
 
         } else if (match_available) {
-            /* If there was no match at the previous position, output a
-             * single literal. If there was a match but the current match
-             * is longer, truncate the previous match to a single literal.
-             */
+            /* 若前一位置没有匹配，则输出一个字面值字节；若前一位置有匹配但当前匹配更长，则将前一匹配缩短为一个字面值字节。
+ *
+ *
+ */
             if (ct_tally (state,0, state.ds.window[state.ds.strstart-1])) {
                 FLUSH_BLOCK(state,0), state.ds.block_start = state.ds.strstart;
             }
             state.ds.strstart++;
             state.ds.lookahead--;
         } else {
-            /* There is no previous match to compare with, wait for
-             * the next step to decide.
-             */
+            /* 尚无前一匹配可以比较，等待下一步再决定。
+ *
+ */
             match_available = 1;
             state.ds.strstart++;
             state.ds.lookahead--;
         }
 //        Assert(state,strstart <= isize && lookahead <= isize, "a bit too far");
 
-        /* Make sure that we always have enough lookahead, except
-         * at the end of the input file. We need MAX_MATCH bytes
-         * for the next match, plus MIN_MATCH bytes to insert the
-         * string following the next match.
-         */
+        /* 除输入末尾外，保留 MAX_MATCH 字节供下次匹配，并额外保留 MIN_MATCH 字节以便插入匹配后的字符串。
+ *
+ *
+ *
+ */
         if (state.ds.lookahead < MIN_LOOKAHEAD) fill_window(state);
     }
     if (match_available) ct_tally (state,0, state.ds.window[state.ds.strstart-1]);
 
-    return FLUSH_BLOCK(state,1); /* eof */
+    return FLUSH_BLOCK(state,1); /* 输入结束。 */
 }
 
 
@@ -1964,7 +1964,7 @@ ulg deflate(TState &state)
 
 
 int putlocal(struct zlist far *z, WRITEFUNC wfunc,void *param)
-{ // Write a local header described by *z to file *f.  Return a ZE_ error code.
+{ // 将 *z 描述的本地头写入文件 *f。  返回 ZE_ 错误代码。
   PUTLG(LOCSIG, f);
   PUTSH(z->ver, f);
   PUTSH(z->lflg, f);
@@ -1985,7 +1985,7 @@ int putlocal(struct zlist far *z, WRITEFUNC wfunc,void *param)
 }
 
 int putextended(struct zlist far *z, WRITEFUNC wfunc, void *param)
-{ // Write an extended local header described by *z to file *f. Returns a ZE_ code
+{ // 将 *z 描述的扩展本地头写入文件 *f。返回ZE_代码
   PUTLG(EXTLOCSIG, f);
   PUTLG(z->crc, f);
   PUTLG(z->siz, f);
@@ -1994,7 +1994,7 @@ int putextended(struct zlist far *z, WRITEFUNC wfunc, void *param)
 }
 
 int putcentral(struct zlist far *z, WRITEFUNC wfunc, void *param)
-{ // Write a central header entry of *z to file *f. Returns a ZE_ code.
+{ // 将 *z 的中央头条目写入文件 *f。返回 ZE_ 代码。
   PUTLG(CENSIG, f);
   PUTSH(z->vem, f);
   PUTSH(z->ver, f);
@@ -2020,7 +2020,7 @@ int putcentral(struct zlist far *z, WRITEFUNC wfunc, void *param)
 
 
 int putend(int n, ulg s, ulg c, extent m, char *z, WRITEFUNC wfunc, void *param)
-{ // write the end of the central-directory-data to file *f.
+{ // 将中央目录数据的末尾写入文件 *f。
   PUTLG(ENDSIG, f);
   PUTSH(0, f);
   PUTSH(0, f);
@@ -2029,7 +2029,7 @@ int putend(int n, ulg s, ulg c, extent m, char *z, WRITEFUNC wfunc, void *param)
   PUTLG(s, f);
   PUTLG(c, f);
   PUTSH(m, f);
-  // Write the comment, if any
+  // 若存在归档注释，则将其写入。
   if (m && wfunc(param, z, (unsigned int)m) != m) return ZE_TEMP;
   return ZE_OK;
 }
@@ -2105,7 +2105,7 @@ ulg crc32(ulg crc, const uch *buf, extent len)
   crc = crc ^ 0xffffffffL;
   while (len >= 8) {DO8(buf); len -= 8;}
   if (len) do {DO1(buf);} while (--len);
-  return crc ^ 0xffffffffL;  // (instead of ~c for 64-bit machines)
+  return crc ^ 0xffffffffL;  // （对于 64 位机器，而不是 ~c）
 }
 
 
@@ -2153,8 +2153,8 @@ lutime_t filetime2timet(const FILETIME ft)
 }
 
 void filetime2dosdatetime(const FILETIME ft, WORD *dosdate,WORD *dostime)
-{ // date: bits 0-4 are day of month 1-31. Bits 5-8 are month 1..12. Bits 9-15 are year-1980
-  // time: bits 0-4 are seconds/2, bits 5-10 are minute 0..59. Bits 11-15 are hour 0..23
+{ // 日期：位 0..4 为日（1..31），位 5..8 为月（1..12），位 9..15 为年份减去 1980。
+  // 时间：位 0..4 为秒数除以 2，位 5..10 为分（0..59），位 11..15 为时（0..23）。
   SYSTEMTIME st; FileTimeToSystemTime(&ft,&st); 
   *dosdate = (WORD)(((st.wYear-1980)&0x7f) << 9);
   *dosdate |= (WORD)((st.wMonth&0xf) << 5);
@@ -2166,27 +2166,27 @@ void filetime2dosdatetime(const FILETIME ft, WORD *dosdate,WORD *dostime)
 
 
 ZRESULT GetFileInfo(HANDLE hf, ulg *attr, long *size, iztimes *times, ulg *timestamp)
-{ // The handle must be a handle to a file
-  // The date and time is returned in a long with the date most significant to allow
-  // unsigned integer comparison of absolute times. The attributes have two
-  // high bytes unix attr, and two low bytes a mapping of that to DOS attr.
+{ // 句柄必须是文件的句柄
+  // 日期与时间合并为一个 long，日期位于高位，
+  // 使无符号整数比较能够反映时间先后。文件属性的
+  // 高 16 位保存 Unix 属性，低 16 位保存对应的 DOS 属性。
   //struct stat s; int res=stat(fn,&s); if (res!=0) return false;
-  // translate windows file attributes into zip ones.
+  // 将 Windows 文件属性转换为 zip 文件属性。
   BY_HANDLE_FILE_INFORMATION bhi; BOOL res=GetFileInformationByHandle(hf,&bhi);
   if (!res) return ZR_NOFILE;
   DWORD fa=bhi.dwFileAttributes; ulg a=0;
-  // Zip uses the lower word for its interpretation of windows stuff
+  // 低 16 位保存由 Windows 属性映射得到的 DOS 属性。
   if (fa&FILE_ATTRIBUTE_READONLY) a|=0x01;
   if (fa&FILE_ATTRIBUTE_HIDDEN)   a|=0x02;
   if (fa&FILE_ATTRIBUTE_SYSTEM)   a|=0x04;
   if (fa&FILE_ATTRIBUTE_DIRECTORY)a|=0x10;
   if (fa&FILE_ATTRIBUTE_ARCHIVE)  a|=0x20;
-  // It uses the upper word for standard unix attr, which we manually construct
-  if (fa&FILE_ATTRIBUTE_DIRECTORY)a|=0x40000000;  // directory
-  else a|=0x80000000;  // normal file
-  a|=0x01000000;      // readable
-  if (fa&FILE_ATTRIBUTE_READONLY) {} else a|=0x00800000; // writeable
-  // now just a small heuristic to check if it's an executable:
+  // 高 16 位保存手动构造的标准 Unix 属性。
+  if (fa&FILE_ATTRIBUTE_DIRECTORY)a|=0x40000000;  // 目录
+  else a|=0x80000000;  // 普通文件
+  a|=0x01000000;      // 可读的
+  if (fa&FILE_ATTRIBUTE_READONLY) {} else a|=0x00800000; // 可写的
+  // 现在只需一个小的启发式方法来检查它是否是可执行文件：
   DWORD red, hsize=GetFileSize(hf,NULL); if (hsize>40)
   { SetFilePointer(hf,0,NULL,FILE_BEGIN); unsigned short magic; ReadFile(hf,&magic,sizeof(magic),&red,NULL);
     SetFilePointer(hf,36,NULL,FILE_BEGIN); unsigned long hpos;  ReadFile(hf,&hpos,sizeof(hpos),&red,NULL);
@@ -2194,7 +2194,7 @@ ZRESULT GetFileInfo(HANDLE hf, ulg *attr, long *size, iztimes *times, ulg *times
     { SetFilePointer(hf,hpos,NULL,FILE_BEGIN); unsigned long signature; ReadFile(hf,&signature,sizeof(signature),&red,NULL);
       if (signature==IMAGE_DOS_SIGNATURE || signature==IMAGE_OS2_SIGNATURE
          || signature==IMAGE_OS2_SIGNATURE_LE || signature==IMAGE_NT_SIGNATURE)
-      { a |= 0x00400000; // executable
+      { a |= 0x00400000; // 可执行文件
       }
     }
   }
@@ -2202,8 +2202,8 @@ ZRESULT GetFileInfo(HANDLE hf, ulg *attr, long *size, iztimes *times, ulg *times
   if (attr!=NULL) *attr = a;
   if (size!=NULL) *size = hsize;
   if (times!=NULL)
-  { // lutime_t is 32bit number of seconds elapsed since 0:0:0GMT, Jan1, 1970.
-    // but FILETIME is 64bit number of 100-nanosecs since Jan1, 1601
+  { // lutime_t 使用 32 位秒数，起点为 1970-01-01 00:00:00 GMT。
+    // FILETIME 使用 64 位计数，单位为 100 纳秒，起点为 1601-01-01。
     times->atime = filetime2timet(bhi.ftLastAccessTime);
     times->mtime = filetime2timet(bhi.ftLastWriteTime);
     times->ctime = filetime2timet(bhi.ftCreationTime);
@@ -2228,27 +2228,27 @@ class TZip
   TZip(const char *pwd) : hfout(0),mustclosehfout(false),hmapout(0),zfis(0),obuf(0),hfin(0),writ(0),oerr(false),hasputcen(false),ooffset(0),encwriting(false),encbuf(0),password(0), state(0) {if (pwd!=0 && *pwd!=0) {password=new char[strlen(pwd)+1]; strcpy(password,pwd);}}
   ~TZip() {if (state!=0) delete state; state=0; if (encbuf!=0) delete[] encbuf; encbuf=0; if (password!=0) delete[] password; password=0;}
 
-  // These variables say about the file we're writing into
-  // We can write to pipe, file-by-handle, file-by-name, memory-to-memmapfile
-  char *password;           // keep a copy of the password
-  HANDLE hfout;             // if valid, we'll write here (for files or pipes)
-  bool mustclosehfout;      // if true, we are responsible for closing hfout
-  HANDLE hmapout;           // otherwise, we'll write here (for memmap)
-  unsigned ooffset;         // for hfout, this is where the pointer was initially
-  ZRESULT oerr;             // did a write operation give rise to an error?
-  unsigned writ;            // how far have we written. This is maintained by Add, not write(), to avoid confusion over seeks
-  bool ocanseek;            // can we seek?
-  char *obuf;               // this is where we've locked mmap to view.
-  unsigned int opos;        // current pos in the mmap
-  unsigned int mapsize;     // the size of the map we created
-  bool hasputcen;           // have we yet placed the central directory?
-  bool encwriting;          // if true, then we'll encrypt stuff using 'keys' before we write it to disk
-  unsigned long keys[3];    // keys are initialised inside Add()
-  char *encbuf;             // if encrypting, then this is a temporary workspace for encrypting the data
-  unsigned int encbufsize;  // (to be used and resized inside write(), and deleted in the destructor)
+  // 以下成员描述正在写入的输出目标。
+  // 输出支持管道、文件句柄、指定文件和内存映射。
+  char *password;           // 保留密码的副本
+  HANDLE hfout;             // 有效时向此文件或管道句柄写入数据。
+  bool mustclosehfout;      // 如果为真，我们有责任关闭 hfout
+  HANDLE hmapout;           // 使用内存映射输出时的映射句柄。
+  unsigned ooffset;         // 对于 hfout，这是指针最初所在的位置
+  ZRESULT oerr;             // 写入操作是否产生错误？
+  unsigned writ;            // 已写入字节数；由 Add 维护，避免 write() 内部的文件定位干扰计数。
+  bool ocanseek;            // 输出目标是否支持移动写入位置。
+  char *obuf;               // 内存映射的已映射视图地址。
+  unsigned int opos;        // mmap 中的当前位置
+  unsigned int mapsize;     // 已创建内存映射的大小。
+  bool hasputcen;           // 我们已经放置了中央目录了吗？
+  bool encwriting;          // 为 true 时，在写入磁盘前用 keys 加密数据。
+  unsigned long keys[3];    // keys 在 Add() 内初始化。
+  char *encbuf;             // 如果加密，那么这是一个用于加密数据的临时工作空间
+  unsigned int encbufsize;  // （在 write() 内部使用和调整大小，并在析构函数中删除）
   //
-  TZipFileInfo *zfis;       // each file gets added onto this list, for writing the table at the end
-  TState *state;            // we use just one state object per zip, because it's big (500k)
+  TZipFileInfo *zfis;       // 每个文件都会添加到此列表中，以便在末尾写入表格
+  TState *state;            // 我们每个 zip 只使用一个状态对象，因为它很大（500k）
 
   ZRESULT Create(void *z,unsigned int len,DWORD flags);
   static unsigned sflush(void *param,const char *buf, unsigned *size);
@@ -2258,17 +2258,17 @@ class TZip
   ZRESULT GetMemory(void **pbuf, unsigned long *plen);
   ZRESULT Close();
 
-  // some variables to do with the file currently being read:
-  // I haven't done it object-orientedly here, just put them all
-  // together, since OO didn't seem to make the design any clearer.
-  ulg attr; iztimes times; ulg timestamp;  // all open_* methods set these
-  bool iseekable; long isize,ired;         // size is not set until close() on pips
-  ulg crc;                                 // crc is not set until close(). iwrit is cumulative
-  HANDLE hfin; bool selfclosehf;           // for input files and pipes
-  const char *bufin; unsigned int lenin,posin; // for memory
-  // and a variable for what we've done with the input: (i.e. compressed it!)
-  ulg csize;                               // compressed size, set by the compression routines
-  // and this is used by some of the compression routines
+  // 以下成员描述当前读取的输入文件。
+  // 这些输入状态成员直接集中存放，
+  // 原作者认为引入更多对象并不能使此处设计更清晰。
+  ulg attr; iztimes times; ulg timestamp;  // 所有 open_* 方法都会设置这些元数据。
+  bool iseekable; long isize,ired;         // 管道输入的大小要到 close() 时才能最终确定。
+  ulg crc;                                 // CRC 要到 close() 时才能最终确定；读取字节数持续累计。
+  HANDLE hfin; bool selfclosehf;           // 用于输入文件和管道
+  const char *bufin; unsigned int lenin,posin; // 内存输入的缓冲区、总长度和当前位置。
+  // 输入数据处理结果，即压缩输出的状态。
+  ulg csize;                               // 压缩大小，由压缩例程设置
+  // 这被一些压缩例程使用
   char buf[16384];
 
 
@@ -2300,8 +2300,8 @@ ZRESULT TZip::Create(void *z,unsigned int len,DWORD flags)
     BOOL res = DuplicateHandle(GetCurrentProcess(),hf,GetCurrentProcess(),&hfout,0,FALSE,DUPLICATE_SAME_ACCESS);
     if (res) mustclosehandle=true;
 #endif
-    // now we have hfout. Either we duplicated the handle and we close it ourselves
-    // (while the caller closes h themselves), or we couldn't duplicate it.
+    // 此时已经获得 hfout；若成功复制了句柄，由本对象负责关闭副本，
+    // 调用方负责关闭原句柄 h；否则使用原句柄。
     DWORD res = SetFilePointer(hfout,0,0,FILE_CURRENT);
     ocanseek = (res!=0xFFFFFFFF);
     if (ocanseek) ooffset=res; else ooffset=0;
@@ -2334,7 +2334,7 @@ ZRESULT TZip::Create(void *z,unsigned int len,DWORD flags)
 }
 
 unsigned TZip::sflush(void *param,const char *buf, unsigned *size)
-{ // static
+{ // 静态的
   if (*size==0) return 0;
   TZip *zip = (TZip*)param;
   unsigned int writ = zip->write(buf,*size);
@@ -2342,7 +2342,7 @@ unsigned TZip::sflush(void *param,const char *buf, unsigned *size)
   return writ;
 }
 unsigned TZip::swrite(void *param,const char *buf, unsigned size)
-{ // static
+{ // 静态的
   if (size==0) return 0;
   TZip *zip=(TZip*)param; return zip->write(buf,size);
 }
@@ -2383,9 +2383,9 @@ bool TZip::oseek(unsigned int pos)
 }
 
 ZRESULT TZip::GetMemory(void **pbuf, unsigned long *plen)
-{ // When the user calls GetMemory, they're presumably at the end
-  // of all their adding. In any case, we have to add the central
-  // directory now, otherwise the memory we tell them won't be complete.
+{ // 调用 GetMemory 通常意味着已经添加完所有条目。
+  // 返回内存数据之前必须写入中央目录，
+  // 否则返回的归档数据不完整。
   if (!hasputcen) AddCentral(); hasputcen=true;
   if (pbuf!=NULL) *pbuf=(void*)obuf;
   if (plen!=NULL) *plen=writ;
@@ -2394,8 +2394,8 @@ ZRESULT TZip::GetMemory(void **pbuf, unsigned long *plen)
 }
 
 ZRESULT TZip::Close()
-{ // if the directory hadn't already been added through a call to GetMemory,
-  // then we do it now
+{ // 如果此前没有通过 GetMemory 写入中央目录，
+  // 则在关闭时补写。
   ZRESULT res=ZR_OK; if (!hasputcen) res=AddCentral(); hasputcen=true;
   if (obuf!=0 && hmapout!=0) UnmapViewOfFile(obuf); obuf=0;
   if (hmapout!=0) CloseHandle(hmapout); hmapout=0;
@@ -2423,14 +2423,14 @@ ZRESULT TZip::open_handle(HANDLE hf,unsigned int len)
   if (res!=0xFFFFFFFF)
   { ZRESULT res = GetFileInfo(hf,&attr,&isize,&times,&timestamp);
     if (res!=ZR_OK) return res;
-    SetFilePointer(hf,0,NULL,FILE_BEGIN); // because GetFileInfo will have screwed it up
+    SetFilePointer(hf,0,NULL,FILE_BEGIN); // GetFileInfo 可能移动了文件位置，在此复位到起点。
     iseekable=true; hfin=hf;
     return ZR_OK;
   }
   else
-  { attr= 0x80000000;      // just a normal file
-    isize = -1;            // can't know size until at the end
-    if (len!=0) isize=len; // unless we were told explicitly!
+  { attr= 0x80000000;      // 只是一个普通文件
+    isize = -1;            // 输入结束之前无法确定管道数据总大小。
+    if (len!=0) isize=len; // 除非调用方已经明确提供长度。
     iseekable=false;
     SYSTEMTIME st; GetLocalTime(&st);
     FILETIME ft;   SystemTimeToFileTime(&st,&ft);
@@ -2447,7 +2447,7 @@ ZRESULT TZip::open_mem(void *src,unsigned int len)
 { hfin=0; bufin=(const char*)src; selfclosehf=false; crc=CRCVAL_INITIAL; ired=0; csize=0; ired=0;
   lenin=len; posin=0;
   if (src==0 || len==0) return ZR_ARGS;
-  attr= 0x80000000; // just a normal file
+  attr= 0x80000000; // 只是一个普通文件
   isize = len;
   iseekable=true;
   SYSTEMTIME st; GetLocalTime(&st);
@@ -2461,7 +2461,7 @@ ZRESULT TZip::open_mem(void *src,unsigned int len)
 }
 ZRESULT TZip::open_dir()
 { hfin=0; bufin=0; selfclosehf=false; crc=CRCVAL_INITIAL; isize=0; csize=0; ired=0;
-  attr= 0x41C00010; // a readable writable directory, and again directory
+  attr= 0x41C00010; // 目录属性：可读、可写，并带有 Unix 与 DOS 目录标记。
   isize = 0;
   iseekable=false;
   SYSTEMTIME st; GetLocalTime(&st);
@@ -2475,14 +2475,14 @@ ZRESULT TZip::open_dir()
 }
 
 unsigned TZip::sread(TState &s,char *buf,unsigned size)
-{ // static
+{ // 静态的
   TZip *zip = (TZip*)s.param;
   return zip->read(buf,size);
 }
 
 unsigned TZip::read(char *buf, unsigned size)
 { if (bufin!=0)
-  { if (posin>=lenin) return 0; // end of input
+  { if (posin>=lenin) return 0; // 输入结束
     ulg red = lenin-posin;
     if (red>size) red=size;
     memcpy(buf, bufin+posin, red);
@@ -2505,7 +2505,7 @@ unsigned TZip::read(char *buf, unsigned size)
 ZRESULT TZip::iclose()
 { if (selfclosehf && hfin!=0) CloseHandle(hfin); hfin=0;
   bool mismatch = (isize!=-1 && isize!=ired);
-  isize=ired; // and crc has been being updated anyway
+  isize=ired; // 无论如何，crc 已经被更新了
   if (mismatch) return ZR_MISSIZE;
   else return ZR_OK;
 }
@@ -2514,18 +2514,18 @@ ZRESULT TZip::iclose()
 
 ZRESULT TZip::ideflate(TZipFileInfo *zfi)
 { if (state==0) state=new TState();
-  // It's a very big object! 500k! We allocate it on the heap, because PocketPC's
-  // stack breaks if we try to put it all on the stack. It will be deleted lazily
+  // 状态对象约 500 KB，因此在堆上分配，
+  // 避免耗尽 PocketPC 较小的栈空间；对象随后统一释放。
   state->err=0;
   state->readfunc=sread; state->flush_outbuf=sflush;
   state->param=this; state->level=8; state->seekable=iseekable; state->err=NULL;
-  // the following line will make ct_init realise it has to perform the init
+  // 以下设置通知 ct_init 执行必要初始化。
   state->ts.static_dtree[0].dl.len = 0;
-  // Thanks to Alvin77 for this crucial fix:
+  // 感谢 Alvin77 提供的这个关键修复：
   state->ds.window_size=0;
-  //  I think that covers everything that needs to be initted.
+  // 上述设置涵盖此处所需的初始化。
   //
-  bi_init(*state,buf, sizeof(buf), TRUE); // it used to be just 1024-size, not 16384 as here
+  bi_init(*state,buf, sizeof(buf), TRUE); // 以前只是 1024 大小，而不是这里的 16384
   ct_init(*state,&zfi->att);
   lm_init(*state,state->level, &zfi->flg);
   ulg sz = deflate(*state);
@@ -2554,10 +2554,10 @@ ZRESULT TZip::Add(const TCHAR *odstzn, void *src,unsigned int len, DWORD flags)
 { if (oerr) return ZR_FAILED;
   if (hasputcen) return ZR_ENDED;
 
-  // if we use password encryption, then every isize and csize is 12 bytes bigger
+  // 如果我们使用密码加密，那么每个 isize 和 csize 都会大 12 个字节
   int passex=0; if (password!=0 && flags!=ZIP_FOLDER) passex=12;
 
-  // zip has its own notion of what its names should look like: i.e. dir/file.stuff
+  // ZIP 内部名称使用正斜杠分隔目录，例如 dir/file.stuff。
   TCHAR dstzn[MAX_PATH]; _tcscpy(dstzn,odstzn);
   if (*dstzn==0) return ZR_ARGS;
   TCHAR *d=dstzn; while (*d!=0) {if (*d=='\\') *d='/'; d++;}
@@ -2565,7 +2565,7 @@ ZRESULT TZip::Add(const TCHAR *odstzn, void *src,unsigned int len, DWORD flags)
   bool needs_trailing_slash = (isdir && dstzn[_tcslen(dstzn)-1]!='/');
   int method=DEFLATE; if (isdir || HasZipSuffix(dstzn)) method=STORE;
 
-  // now open whatever was our input source:
+  // 现在打开我们的输入源：
   ZRESULT openres;
   if (flags==ZIP_FILENAME) openres=open_file((const TCHAR*)src);
   else if (flags==ZIP_HANDLE) openres=open_handle((HANDLE)src,len);
@@ -2574,10 +2574,10 @@ ZRESULT TZip::Add(const TCHAR *odstzn, void *src,unsigned int len, DWORD flags)
   else return ZR_ARGS;
   if (openres!=ZR_OK) return openres;
 
-  // A zip "entry" consists of a local header (which includes the file name),
-  // then the compressed data, and possibly an extended local header.
+  // zip“条目”由本地标头（包括文件名）组成，
+  // 然后是压缩数据，可能还有扩展的本地标头。
 
-  // Initialize the local header
+  // 初始化本地头
   TZipFileInfo zfi; zfi.nxt=NULL;
   strcpy(zfi.name,"");
 #ifdef UNICODE
@@ -2588,34 +2588,34 @@ ZRESULT TZip::Add(const TCHAR *odstzn, void *src,unsigned int len, DWORD flags)
   zfi.nam=strlen(zfi.iname);
   if (needs_trailing_slash) {strcat(zfi.iname,"/"); zfi.nam++;}
   strcpy(zfi.zname,"");
-  zfi.extra=NULL; zfi.ext=0;   // extra header to go after this compressed data, and its length
-  zfi.cextra=NULL; zfi.cext=0; // extra header to go in the central end-of-zip directory, and its length
-  zfi.comment=NULL; zfi.com=0; // comment, and its length
+  zfi.extra=NULL; zfi.ext=0;   // 压缩数据后的额外标头及其长度
+  zfi.cextra=NULL; zfi.cext=0; // 写入归档尾部中央目录的附加字段及其长度。
+  zfi.comment=NULL; zfi.com=0; // 条目注释及其长度。
   zfi.mark = 1;
   zfi.dosflag = 0;
   zfi.att = (ush)BINARY;
-  zfi.vem = (ush)0xB17; // 0xB00 is win32 os-code. 0x17 is 23 in decimal: zip 2.3
-  zfi.ver = (ush)20;    // Needs PKUNZIP 2.0 to unzip it
+  zfi.vem = (ush)0xB17; // 0xB00 是 win32 操作系统代码。 0x17 是十进制的 23：zip 2.3
+  zfi.ver = (ush)20;    // 需要 PKUNZIP 2.0 来解压
   zfi.tim = timestamp;
-  // Even though we write the header now, it will have to be rewritten, since we don't know compressed size or crc.
-  zfi.crc = 0;            // to be updated later
-  zfi.flg = 8;            // 8 means 'there is an extra header'. Assume for the moment that we need it.
-  if (password!=0 && !isdir) zfi.flg=9;  // and 1 means 'password-encrypted'
-  zfi.lflg = zfi.flg;     // to be updated later
-  zfi.how = (ush)method;  // to be updated later
-  zfi.siz = (ulg)(method==STORE && isize>=0 ? isize+passex : 0); // to be updated later
-  zfi.len = (ulg)(isize);  // to be updated later
+  // 即使我们现在写了标头，它也必须被重写，因为我们不知道压缩大小或 crc。
+  zfi.crc = 0;            // 稍后更新
+  zfi.flg = 8;            // 位值 8 表示存在数据描述符，暂按需要该描述符处理。
+  if (password!=0 && !isdir) zfi.flg=9;  // 位值 1 表示使用密码加密。
+  zfi.lflg = zfi.flg;     // 稍后更新
+  zfi.how = (ush)method;  // 稍后更新
+  zfi.siz = (ulg)(method==STORE && isize>=0 ? isize+passex : 0); // 稍后更新
+  zfi.len = (ulg)(isize);  // 稍后更新
   zfi.dsk = 0;
   zfi.atx = attr;
-  zfi.off = writ+ooffset;         // offset within file of the start of this local record
-  // stuff the 'times' structure into zfi.extra
+  zfi.off = writ+ooffset;         // 文件内该本地记录开头的偏移量
+  // 将“times”结构填充到 zfi.extra 中
 
-  // nb. apparently there's a problem with PocketPC CE(zip)->CE(unzip) fails. And removing the following block fixes it up.
+  // 原作者注：PocketPC CE 压缩后再在 CE 解压存在问题，曾观察到跳过下方时间字段可避免该问题。
   char xloc[EB_L_UT_SIZE]; zfi.extra=xloc;  zfi.ext=EB_L_UT_SIZE;
   char xcen[EB_C_UT_SIZE]; zfi.cextra=xcen; zfi.cext=EB_C_UT_SIZE;
   xloc[0]  = 'U';
   xloc[1]  = 'T';
-  xloc[2]  = EB_UT_LEN(3);       // length of data part of e.f.
+  xloc[2]  = EB_UT_LEN(3);       // e.f.数据部分的长度
   xloc[3]  = 0;
   xloc[4]  = EB_UT_FL_MTIME | EB_UT_FL_ATIME | EB_UT_FL_CTIME;
   xloc[5]  = (char)(times.mtime);
@@ -2634,27 +2634,27 @@ ZRESULT TZip::Add(const TCHAR *odstzn, void *src,unsigned int len, DWORD flags)
   zfi.cextra[EB_LEN] = EB_UT_LEN(1);
 
 
-  // (1) Start by writing the local header:
+  // (1) 首先写入本地头：
   int r = putlocal(&zfi,swrite,this);
   if (r!=ZE_OK) {iclose(); return ZR_WRITE;}
   writ += 4 + LOCHEAD + (unsigned int)zfi.nam + (unsigned int)zfi.ext;
   if (oerr!=ZR_OK) {iclose(); return oerr;}
 
-  // (1.5) if necessary, write the encryption header
+  // (1.5)如果需要，写入加密头
   keys[0]=305419896L;
   keys[1]=591751049L;
   keys[2]=878082192L;
   for (const char *cp=password; cp!=0 && *cp!=0; cp++) update_keys(keys,*cp);
-  // generate some random bytes
+  // 生成一些随机字节
   if (!has_seeded) srand(GetTickCount()^(unsigned long)GetDesktopWindow());
   char encbuf[12]; for (int i=0; i<12; i++) encbuf[i]=(char)((rand()>>7)&0xff);
   encbuf[11] = (char)((zfi.tim>>8)&0xff);
   for (int ei=0; ei<12; ei++) encbuf[ei]=zencode(keys,encbuf[ei]);
   if (password!=0 && !isdir) {swrite(this,encbuf,12); writ+=12;}
 
-  //(2) Write deflated/stored file to zip file
+  // (2) 将压缩/存储的文件写入zip文件
   ZRESULT writeres=ZR_OK;
-  encwriting = (password!=0 && !isdir);  // an object member variable to say whether we write to disk encrypted
+  encwriting = (password!=0 && !isdir);  // 一个对象成员变量来表示我们是否加密写入磁盘
   if (!isdir && method==DEFLATE) writeres=ideflate(&zfi);
   else if (!isdir && method==STORE) writeres=istore();
   else if (isdir) csize=0;
@@ -2664,31 +2664,31 @@ ZRESULT TZip::Add(const TCHAR *odstzn, void *src,unsigned int len, DWORD flags)
   if (oerr!=ZR_OK) return oerr;
   if (writeres!=ZR_OK) return ZR_WRITE;
 
-  // (3) Either rewrite the local header with correct information...
+  // (3) 或者用正确的信息重写本地标头...
   bool first_header_has_size_right = (zfi.siz==csize+passex);
   zfi.crc = crc;
   zfi.siz = csize+passex;
   zfi.len = isize;
   if (ocanseek && (password==0 || isdir))
   { zfi.how = (ush)method;
-    if ((zfi.flg & 1) == 0) zfi.flg &= ~8; // clear the extended local header flag
+    if ((zfi.flg & 1) == 0) zfi.flg &= ~8; // 清除扩展本地标头标志
     zfi.lflg = zfi.flg;
-    // rewrite the local header:
+    // 重写本地头：
     if (!oseek(zfi.off-ooffset)) return ZR_SEEK;
     if ((r = putlocal(&zfi, swrite,this)) != ZE_OK) return ZR_WRITE;
     if (!oseek(writ)) return ZR_SEEK;
   }
   else
-  { // (4) ... or put an updated header at the end
+  { // (4) ...或者在末尾放置更新的标头
     if (zfi.how != (ush) method) return ZR_NOCHANGE;
     if (method==STORE && !first_header_has_size_right) return ZR_NOCHANGE;
     if ((r = putextended(&zfi, swrite,this)) != ZE_OK) return ZR_WRITE;
     writ += 16L;
-    zfi.flg = zfi.lflg; // if flg modified by inflate, for the central index
+    zfi.flg = zfi.lflg; // 若压缩过程修改了 flg，则恢复供中央目录使用的标志。
   }
   if (oerr!=ZR_OK) return oerr;
 
-  // Keep a copy of the zipfileinfo, for our end-of-zip directory
+  // 保留 zipfileinfo 的副本，作为我们的 zip 结尾目录
   char *cextra = new char[zfi.cext]; memcpy(cextra,zfi.cextra,zfi.cext); zfi.cextra=cextra;
   TZipFileInfo *pzfi = new TZipFileInfo; memcpy(pzfi,&zfi,sizeof(zfi));
   if (zfis==NULL) zfis=pzfi;
@@ -2697,7 +2697,7 @@ ZRESULT TZip::Add(const TCHAR *odstzn, void *src,unsigned int len, DWORD flags)
 }
 
 ZRESULT TZip::AddCentral()
-{ // write central directory
+{ // 写入中心目录
   int numentries = 0;
   ulg pos_at_start_of_central = writ;
   //ulg tot_unc_size=0, tot_compressed_size=0;
